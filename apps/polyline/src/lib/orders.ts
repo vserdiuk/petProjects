@@ -181,3 +181,26 @@ export function applyAddress(order: Order, end: End, point: LngLat, address: { e
   if ((order.values[localCol] ?? "") === "") generated[localCol] = address.local;
   return assign(order, generated);
 }
+
+/** Put a generated value into a cell (e.g. a picked name); the cell stays generator-owned. */
+export function setGenerated(order: Order, column: string, value: string): Order {
+  return { ...order, values: { ...order.values, [column]: value }, manual: order.manual.filter((c) => c !== column) };
+}
+
+export function renameColumnInOrders(orders: Order[], from: string, to: string): Order[] {
+  return orders.map((o) => {
+    const values: Record<string, string> = {};
+    for (const [k, v] of Object.entries(o.values)) values[k === from ? to : k] = v;
+    return { ...o, values, manual: o.manual.map((c) => (c === from ? to : c)) };
+  });
+}
+
+export function dropColumnFromOrders(orders: Order[], column: string): Order[] {
+  return orders.map((o) => {
+    const { [column]: _dropped, ...values } = o.values;
+    void _dropped;
+    return { ...o, values, manual: o.manual.filter((c) => c !== column) };
+  });
+}
+
+export const isDefaultColumn = (c: string) => (DEFAULT_COLUMNS as readonly string[]).includes(c);

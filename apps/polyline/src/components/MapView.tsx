@@ -39,7 +39,22 @@ type Props = {
   drawMode: boolean;
   /** Incremented by the parent to request fitting the map to the line. */
   fitToken: number;
+  /** Order under the mouse: its pickup, dropoff and the route between them. */
+  highlight?: { pickup: LngLat | null; dropoff: LngLat | null; route: LngLat[] } | null;
 };
+
+const EMPTY_FC: FeatureCollection = { type: "FeatureCollection", features: [] };
+
+function highlightData(h: Props["highlight"]): FeatureCollection {
+  if (!h) return EMPTY_FC;
+  const features: Feature[] = [];
+  if (h.route.length >= 2) {
+    features.push({ type: "Feature", properties: { kind: "route" }, geometry: { type: "LineString", coordinates: h.route } });
+  }
+  if (h.pickup) features.push({ type: "Feature", properties: { kind: "pickup", label: "P" }, geometry: { type: "Point", coordinates: h.pickup } });
+  if (h.dropoff) features.push({ type: "Feature", properties: { kind: "dropoff", label: "D" }, geometry: { type: "Point", coordinates: h.dropoff } });
+  return { type: "FeatureCollection", features };
+}
 
 const lineFeature = (coords: LngLat[]): Feature => ({
   type: "Feature",
@@ -56,12 +71,13 @@ const pointsFeatureCollection = (coords: LngLat[]): FeatureCollection => ({
   })),
 });
 
-export function MapView({ coords, onChange, drawMode, fitToken }: Props) {
+export function MapView({ coords, onChange, drawMode, fitToken, highlight }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const loadedRef = useRef(false);
   const syncRef = useRef<() => void>(() => {});
+  const highlightRef = useRef<() => void>(() => {});
 
   // Latest props for map event handlers registered once.
   const latest = useRef({ coords, onChange, drawMode });
@@ -107,7 +123,29 @@ export function MapView({ coords, onChange, drawMode, fitToken }: Props) {
           "circle-stroke-width": 1,
         },
       });
+      map.addSource("highlight", { type: "geojson", data: EMPTY_FC });
+      map.addLayer({
+        id: "highlight-route",
+        type: "line",
+        source: "highlight",
+        filter: ["==", ["get", "kind"], "route"],
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": "#f08c00", "line-width": 7, "line-opacity": 0.9 },
+      });
+      map.addLayer({
+        id: "highlight-points",
+        type: "circle",
+        source: "highlight",
+        filter: ["!=", ["get", "kind"], "route"],
+        paint: {
+          "circle-radius": 9,
+          "circle-color": ["match", ["get", "kind"], "pickup", "#1f9d55", "#d92d20"],
+          "circle-stroke-color": "#fff",
+          "circle-stroke-width": 2,
+        },
+      });
       loadedRef.current = true;
+      highlightRef.current();
       syncRef.current();
     });
 
@@ -188,6 +226,16 @@ export function MapView({ coords, onChange, drawMode, fitToken }: Props) {
     map.fitBounds(bounds, { padding: 48, maxZoom: 16, duration: 400 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitToken]);
+
+  useEffect(() => {
+    const apply = () => {
+      const map = mapRef.current;
+      if (!map || !loadedRef.current) return;
+      (map.getSource("highlight") as GeoJSONSource).setData(highlightData(highlight));
+    };
+    highlightRef.current = apply;
+    apply();
+  }, [highlight]);
 
   useEffect(() => {
     mapRef.current?.getCanvas().style.setProperty("cursor", drawMode ? "crosshair" : "");
