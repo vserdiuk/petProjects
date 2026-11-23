@@ -1,0 +1,11 @@
+{
+  "name": "pet-projects",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "dev:portal": "pnpm --filter portal dev",
+    "dev:polyline": "pnpm --filter polyline dev",
+    "build": "pnpm -r --filter \"./apps/**\" build && node scripts/assemble.mjs",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
