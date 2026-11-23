@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { MapView } from "./components/MapView";
 import { PolylinePanel } from "./components/PolylinePanel";
 import { DEFAULT_TABLE_SETTINGS, OrdersTable, type TableSettings } from "./components/OrdersTable";
-import { alongOf, DEFAULT_COLUMNS, readPoint, type Order } from "./lib/orders";
-import { sliceAlong } from "./lib/sampling";
+import { DEFAULT_COLUMNS, readPoint, type Order } from "./lib/orders";
+import { roadRoute } from "./lib/route";
 import { timeZoneAt } from "./lib/time";
 import { useAddressFill } from "./lib/useAddressFill";
 import type { Precision } from "./lib/polyline";
@@ -24,16 +24,45 @@ export function App() {
   const [columns, setColumns] = useState<string[]>(() => load<string[]>("columns", [...DEFAULT_COLUMNS]));
   useEffect(() => save("columns", columns), [columns]);
   const [hovered, setHovered] = useState<Order | null>(null);
-  const highlight = useMemo(() => {
+  const [roadPath, setRoadPath] = useState<{ id: string; coords: LngLat[] | null } | null>(null);
+  const ends = useMemo(() => {
     if (!hovered) return null;
-    const pickup = readPoint(hovered, "pickup");
-    const dropoff = readPoint(hovered, "dropoff");
-    const a = alongOf(hovered, "pickup", coords);
-    const b = alongOf(hovered, "dropoff", coords);
-    const route =
-      pickup && dropoff && a != null && b != null ? [pickup, ...sliceAlong(coords, a, b), dropoff] : [];
-    return { pickup, dropoff, route };
-  }, [hovered, coords]);
+    return { pickup: readPoint(hovered, "pickup"), dropoff: readPoint(hovered, "dropoff") };
+  }, [hovered]);
+  const endsId = ends?.pickup && ends.dropoff ? `${ends.pickup};${ends.dropoff}` : null;
+
+  // Road route for the hovered row (debounced so sweeping over rows does not flood OSRM).
+  useEffect(() => {
+    if (tableSettings.routeMode !== "road" || !endsId || !ends?.pickup || !ends.dropoff) return;
+    const { pickup, dropoff } = ends;
+    let alive = true;
+    const t = setTimeout(() => {
+      roadRoute(pickup, dropoff).then(
+        (coords) => alive && setRoadPath({ id: endsId, coords }),
+        () => alive && setRoadPath({ id: endsId, coords: null }),
+      );
+    }, 250);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [endsId, ends, tableSettings.routeMode]);
+
+  const highlight = useMemo(() => {
+    if (!ends) return null;
+    const { pickup, dropoff } = ends;
+    if (!pickup || !dropoff) return { pickup, dropoff, route: [], dashed: true };
+    const road = tableSettings.routeMode === "road" && roadPath?.id === endsId ? roadPath.coords : null;
+    return road ? { pickup, dropoff, route: road, dashed: false } : { pickup, dropoff, route: [pickup, dropoff], dashed: true };
+  }, [ends, endsId, roadPath, tableSettings.routeMode]);
+  const routeStatus =
+    tableSettings.routeMode === "road" && endsId
+      ? roadPath?.id !== endsId
+        ? "loading"
+        : roadPath.coords
+          ? "ok"
+          : "failed"
+      : null;
 
   const geocoding = useAddressFill(orders, setOrders, tableSettings.autoAddresses);
   const detectedTimeZone = useMemo(() => (coords.length ? timeZoneAt(coords[0]) : null), [coords]);
@@ -81,6 +110,7 @@ export function App() {
           setOrders(nextOrders);
         }}
         onHoverOrder={setHovered}
+        routeStatus={routeStatus}
       />
     </div>
   );

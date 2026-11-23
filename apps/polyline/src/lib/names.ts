@@ -1,4 +1,4 @@
-import type { Rng } from "./sampling";
+import type { Rng } from "./zone";
 
 const FIRST = [
   "Olivia", "Liam", "Emma", "Noah", "Ava", "Oliver", "Sophia", "Elijah", "Isabella", "James",
