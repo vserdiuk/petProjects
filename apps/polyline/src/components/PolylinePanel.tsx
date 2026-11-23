@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { decodePolyline, encodePolyline, type Precision } from "../lib/polyline";
 import { formatCoordinates, parseCoordinates } from "../lib/geojson";
 import { lineLength } from "../lib/geo";
+import { closedRing } from "../lib/zone";
 import type { LngLat } from "../lib/types";
 import { MAX_EDITABLE_VERTICES } from "./MapView";
 
@@ -72,7 +73,7 @@ export function PolylinePanel(props: Props) {
     }
   };
 
-  const km = lineLength(coords) / 1000;
+  const km = lineLength(closedRing(coords)) / 1000;
 
   return (
     <section className="panel">
@@ -148,10 +149,10 @@ export function PolylinePanel(props: Props) {
       </div>
 
       <p className="stats">
-        {coords.length} points · {km.toFixed(2)} km
+        {coords.length} points · zone perimeter {km.toFixed(2)} km
         {coords.length > MAX_EDITABLE_VERTICES && ` · editing on map is off above ${MAX_EDITABLE_VERTICES} points`}
       </p>
-      <p className="hint">Drag a point to move it, right-click a point to delete it.</p>
+      <p className="hint">The polyline outlines the delivery zone (it closes automatically). Drag a point to move it, right-click a point to delete it.</p>
     </section>
   );
 }

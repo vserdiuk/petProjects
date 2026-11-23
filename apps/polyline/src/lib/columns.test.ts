@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { areSimilar, checkColumnName } from "./columns";
 import { fillTemplate, memoOptions, nameOptions } from "./names";
-import { sliceAlong } from "./sampling";
-import type { LngLat } from "./types";
 
 const DEFAULTS = ["id", "contact_name", "contact_phone", "pickup.lng", "memo"];
 
@@ -43,16 +41,5 @@ describe("names and memo", () => {
       "I'm Emma Brown, I will be waiting for you at Tokyo Station between 2021-09-22T00:00:00+09:00 and 2021-09-22T08:00:00+09:00.",
     );
     expect(fillTemplate("{contact_name} at {x}", {})).toBe("{contact_name} at {x}");
-  });
-});
-
-describe("sliceAlong", () => {
-  const line: LngLat[] = [[0, 0], [0.01, 0], [0.02, 0], [0.03, 0]];
-  it("cuts between two distances and keeps inner vertices", () => {
-    const s = sliceAlong(line, 500, 2500);
-    expect(s).toHaveLength(4);
-    expect(s[1]).toEqual([0.01, 0]);
-    expect(s[0][0]).toBeCloseTo(0.0045, 4);
-    expect(s[3][0]).toBeCloseTo(0.0225, 4);
   });
 });

@@ -13,6 +13,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import type { Feature, FeatureCollection } from "geojson";
 import type { LngLat } from "../lib/types";
+import { closedRing } from "../lib/zone";
 
 /** Above this many vertices, points are drawn but not individually editable (performance). */
 export const MAX_EDITABLE_VERTICES = 500;
@@ -40,7 +41,7 @@ type Props = {
   /** Incremented by the parent to request fitting the map to the line. */
   fitToken: number;
   /** Order under the mouse: its pickup, dropoff and the route between them. */
-  highlight?: { pickup: LngLat | null; dropoff: LngLat | null; route: LngLat[] } | null;
+  highlight?: { pickup: LngLat | null; dropoff: LngLat | null; route: LngLat[]; dashed: boolean } | null;
 };
 
 const EMPTY_FC: FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -49,18 +50,20 @@ function highlightData(h: Props["highlight"]): FeatureCollection {
   if (!h) return EMPTY_FC;
   const features: Feature[] = [];
   if (h.route.length >= 2) {
-    features.push({ type: "Feature", properties: { kind: "route" }, geometry: { type: "LineString", coordinates: h.route } });
+    features.push({ type: "Feature", properties: { kind: "route", dashed: h.dashed }, geometry: { type: "LineString", coordinates: h.route } });
   }
   if (h.pickup) features.push({ type: "Feature", properties: { kind: "pickup", label: "P" }, geometry: { type: "Point", coordinates: h.pickup } });
   if (h.dropoff) features.push({ type: "Feature", properties: { kind: "dropoff", label: "D" }, geometry: { type: "Point", coordinates: h.dropoff } });
   return { type: "FeatureCollection", features };
 }
 
-const lineFeature = (coords: LngLat[]): Feature => ({
-  type: "Feature",
-  properties: {},
-  geometry: { type: "LineString", coordinates: coords },
-});
+/** The zone outline (closed once it has 3+ points) and its fill. */
+const lineFeature = (coords: LngLat[]): FeatureCollection => {
+  const ring = closedRing(coords);
+  const features: Feature[] = [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: ring } }];
+  if (ring.length >= 4) features.push({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [ring] } });
+  return { type: "FeatureCollection", features };
+};
 
 const pointsFeatureCollection = (coords: LngLat[]): FeatureCollection => ({
   type: "FeatureCollection",
@@ -99,9 +102,17 @@ export function MapView({ coords, onChange, drawMode, fitToken, highlight }: Pro
       map.addSource("line", { type: "geojson", data: lineFeature([]) });
       map.addSource("vertices", { type: "geojson", data: pointsFeatureCollection([]) });
       map.addLayer({
+        id: "zone-fill",
+        type: "fill",
+        source: "line",
+        filter: ["==", ["geometry-type"], "Polygon"],
+        paint: { "fill-color": "#2f6fed", "fill-opacity": 0.12 },
+      });
+      map.addLayer({
         id: "line-casing",
         type: "line",
         source: "line",
+        filter: ["==", ["geometry-type"], "LineString"],
         layout: { "line-join": "round", "line-cap": "round" },
         paint: { "line-color": "#ffffff", "line-width": 7 },
       });
@@ -109,6 +120,7 @@ export function MapView({ coords, onChange, drawMode, fitToken, highlight }: Pro
         id: "line",
         type: "line",
         source: "line",
+        filter: ["==", ["geometry-type"], "LineString"],
         layout: { "line-join": "round", "line-cap": "round" },
         paint: { "line-color": "#2f6fed", "line-width": 4 },
       });
@@ -128,9 +140,16 @@ export function MapView({ coords, onChange, drawMode, fitToken, highlight }: Pro
         id: "highlight-route",
         type: "line",
         source: "highlight",
-        filter: ["==", ["get", "kind"], "route"],
+        filter: ["all", ["==", ["get", "kind"], "route"], ["!", ["get", "dashed"]]],
         layout: { "line-join": "round", "line-cap": "round" },
-        paint: { "line-color": "#f08c00", "line-width": 7, "line-opacity": 0.9 },
+        paint: { "line-color": "#f08c00", "line-width": 6, "line-opacity": 0.95 },
+      });
+      map.addLayer({
+        id: "highlight-straight",
+        type: "line",
+        source: "highlight",
+        filter: ["all", ["==", ["get", "kind"], "route"], ["get", "dashed"]],
+        paint: { "line-color": "#f08c00", "line-width": 4, "line-dasharray": [2, 1.5] },
       });
       map.addLayer({
         id: "highlight-points",

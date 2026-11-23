@@ -16,13 +16,12 @@ import {
   type GenerateSettings,
   type Order,
 } from "../lib/orders";
-import { SamplingError } from "../lib/sampling";
+import { SamplingError } from "../lib/zone";
 import { downloadText, toCsv } from "../lib/csv";
 import { browserTimeZone, isValidTimeZone } from "../lib/time";
 import type { LngLat } from "../lib/types";
 
 export type TableSettings = {
-  bufferM: number;
   minGapKm: number;
   windowHours: number;
   /** Empty = detect from the polyline. */
@@ -30,15 +29,17 @@ export type TableSettings = {
   batchSize: number;
   /** Fill addresses through Nominatim. */
   autoAddresses: boolean;
+  /** Path drawn between pickup and dropoff when hovering a row. */
+  routeMode: "straight" | "road";
 };
 
 export const DEFAULT_TABLE_SETTINGS: TableSettings = {
-  bufferM: 10,
   minGapKm: 2,
   windowHours: 8,
   timeZoneOverride: "",
   batchSize: 10,
   autoAddresses: true,
+  routeMode: "road",
 };
 
 type Props = {
@@ -52,6 +53,7 @@ type Props = {
   columns: string[];
   onColumnsChange: (columns: string[], orders: Order[]) => void;
   onHoverOrder: (order: Order | null) => void;
+  routeStatus: "loading" | "ok" | "failed" | null;
 };
 
 type Picker = { key: string; column: string; options: string[]; x: number; y: number };
@@ -82,6 +84,7 @@ export function OrdersTable({
   columns,
   onColumnsChange,
   onHoverOrder,
+  routeStatus,
 }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [picker, setPicker] = useState<Picker | null>(null);
@@ -130,7 +133,6 @@ export function OrdersTable({
 
   const genSettings: GenerateSettings = useMemo(
     () => ({
-      bufferM: Math.max(0, settings.bufferM),
       minGapM: Math.max(0, settings.minGapKm) * 1000,
       windowHours: settings.windowHours,
       timeZone,
@@ -176,10 +178,6 @@ export function OrdersTable({
   return (
     <section className="orders">
       <div className="orders-bar">
-        <label>
-          Distance from line, m
-          <input type="number" min={0} value={settings.bufferM} onChange={(e) => set("bufferM", num(e.target.value, 0))} />
-        </label>
         <label>
           Min pickup→dropoff, km
           <input type="number" min={0} step={0.5} value={settings.minGapKm} onChange={(e) => set("minGapKm", num(e.target.value, 0))} />
@@ -234,6 +232,15 @@ export function OrdersTable({
             }}
           />
           Fill addresses (OpenStreetMap Nominatim, 1 request/s)
+        </label>
+        <label className="route-mode">
+          Route on hover
+          <select value={settings.routeMode} onChange={(e) => set("routeMode", e.target.value as TableSettings["routeMode"])}>
+            <option value="road">By road (OSRM)</option>
+            <option value="straight">Straight line</option>
+          </select>
+          {routeStatus === "loading" && <span className="muted-note">loading route…</span>}
+          {routeStatus === "failed" && <span className="muted-note">no road route, showing a straight line</span>}
         </label>
         {geocoding.pending > 0 && (
           <span className="geo-status" role="status">
@@ -297,7 +304,7 @@ export function OrdersTable({
             {orders.length === 0 && (
               <tr>
                 <td className="empty" colSpan={columns.length + 2}>
-                  Press + to generate an order along the polyline.
+                  Press + to generate an order inside the zone.
                 </td>
               </tr>
             )}

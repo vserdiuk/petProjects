@@ -1,4 +1,4 @@
-import { samplePickupDropoff, sampleOneEnd, distanceToLine, type Rng, type SampleOptions } from "./sampling";
+import { samplePickupDropoff, sampleOneEnd, type Rng, type ZoneOptions } from "./zone";
 import { formatIsoInZone } from "./time";
 import type { LngLat } from "./types";
 
@@ -32,11 +32,9 @@ export type Order = {
   values: Record<string, string>;
   /** Columns the user edited by hand; generation never overwrites them. */
   manual: string[];
-  /** Position along the polyline in metres, when known. */
-  along: { pickup: number | null; dropoff: number | null };
 };
 
-export type GenerateSettings = SampleOptions & {
+export type GenerateSettings = ZoneOptions & {
   windowHours: number;
   timeZone: string;
 };
@@ -84,17 +82,12 @@ export function createOrder(
   Object.assign(values, {
     id: String(id),
     ...timeWindow(now, settings),
-    "pickup.lng": String(pickup.point[0]),
-    "pickup.lat": String(pickup.point[1]),
-    "dropoff.lng": String(dropoff.point[0]),
-    "dropoff.lat": String(dropoff.point[1]),
+    "pickup.lng": String(pickup[0]),
+    "pickup.lat": String(pickup[1]),
+    "dropoff.lng": String(dropoff[0]),
+    "dropoff.lat": String(dropoff[1]),
   });
-  return {
-    key: newKey(),
-    values,
-    manual: [],
-    along: { pickup: pickup.along, dropoff: dropoff.along },
-  };
+  return { key: newKey(), values, manual: [] };
 }
 
 /** True when the user pinned this end's coordinates by hand. */
@@ -106,13 +99,6 @@ export function readPoint(order: Order, end: End): LngLat | null {
   const lng = parseFloat(order.values[`${end}.lng`]);
   const lat = parseFloat(order.values[`${end}.lat`]);
   return Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : null;
-}
-
-/** Along-line position of an end, recomputed from its coordinates when unknown. */
-export function alongOf(order: Order, end: End, coords: LngLat[]): number | null {
-  if (order.along[end] != null) return order.along[end];
-  const p = readPoint(order, end);
-  return p && coords.length >= 2 ? distanceToLine(p, coords).along : null;
 }
 
 /**
@@ -129,26 +115,21 @@ export function regenerateEnd(
 ): Order {
   if (endIsManual(order, end)) return order;
   const other: End = end === "pickup" ? "dropoff" : "pickup";
-  const p = sampleOneEnd(coords, end, alongOf(order, other, coords), settings, rng);
+  const p = sampleOneEnd(coords, readPoint(order, other), settings, rng);
   const [lngCol, latCol, enCol, localCol] = endColumns(end);
-  const next = assign(order, {
-    [lngCol]: String(p.point[0]),
-    [latCol]: String(p.point[1]),
+  return assign(order, {
+    [lngCol]: String(p[0]),
+    [latCol]: String(p[1]),
     [enCol]: "",
     [localCol]: "",
   });
-  return { ...next, along: { ...order.along, [end]: p.along } };
 }
 
 /** Apply a manual cell edit. Clearing a cell hands it back to the generator. */
 export function editCell(order: Order, column: string, value: string): Order {
   const manual = order.manual.filter((c) => c !== column);
   if (value !== "") manual.push(column);
-  const along = { ...order.along };
-  for (const end of ["pickup", "dropoff"] as End[]) {
-    if (column === `${end}.lng` || column === `${end}.lat`) along[end] = null;
-  }
-  return { ...order, values: { ...order.values, [column]: value }, manual, along };
+  return { ...order, values: { ...order.values, [column]: value }, manual };
 }
 
 export function nextId(orders: Order[]): number {

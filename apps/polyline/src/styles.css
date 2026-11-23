@@ -129,3 +129,6 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .picker-foot { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
 .picker-foot button { color: var(--accent); }
 .orders tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.route-mode { display: inline-flex; align-items: center; gap: 6px; }
+.route-mode select { padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.muted-note { color: var(--muted); font-size: 12px; }

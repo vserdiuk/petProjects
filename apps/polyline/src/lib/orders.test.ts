@@ -3,8 +3,8 @@ import { createOrder, DEFAULT_COLUMNS, editCell, regenerateEnd, type GenerateSet
 import { toCsv } from "./csv";
 import type { LngLat } from "./types";
 
-const LINE: LngLat[] = [[139.70, 35.68], [139.80, 35.68]]; // ~9 km in Tokyo
-const SETTINGS: GenerateSettings = { bufferM: 10, minGapM: 2000, windowHours: 8, timeZone: "Asia/Tokyo" };
+const LINE: LngLat[] = [[139.70, 35.66], [139.80, 35.66], [139.80, 35.72], [139.70, 35.72]]; // ~9 × 6.7 km zone in Tokyo
+const SETTINGS: GenerateSettings = { minGapM: 2000, windowHours: 8, timeZone: "Asia/Tokyo" };
 const NOW = new Date("2021-09-21T15:00:00Z");
 
 describe("orders", () => {
@@ -17,7 +17,6 @@ describe("orders", () => {
     expect(o.values.dropoff_window_start).toBe(o.values.pickup_window_start);
     expect(o.values.dropoff_window_end).toBe(o.values.pickup_window_end);
     expect(o.values.capacity).toBe("");
-    expect(parseFloat(o.values["pickup.lng"])).toBeLessThan(parseFloat(o.values["dropoff.lng"]));
   });
 
   it("regeneration keeps cells edited by hand", () => {
