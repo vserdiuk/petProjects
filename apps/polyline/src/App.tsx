@@ -1,6 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { MapView } from "./components/MapView";
 import { PolylinePanel } from "./components/PolylinePanel";
+import { DEFAULT_TABLE_SETTINGS, OrdersTable, type TableSettings } from "./components/OrdersTable";
+import type { Order } from "./lib/orders";
+import { timeZoneAt } from "./lib/time";
 import type { Precision } from "./lib/polyline";
 import { load, save } from "./lib/storage";
 import type { LngLat } from "./lib/types";
@@ -11,7 +14,16 @@ export function App() {
   const [drawMode, setDrawMode] = useState(true);
   const [fitToken, setFitToken] = useState(() => (coords.length ? 1 : 0));
 
+  const [orders, setOrders] = useState<Order[]>(() => load<Order[]>("orders", []));
+  const [tableSettings, setTableSettings] = useState<TableSettings>(() => ({
+    ...DEFAULT_TABLE_SETTINGS,
+    ...load<Partial<TableSettings>>("tableSettings", {}),
+  }));
+  const detectedTimeZone = useMemo(() => (coords.length ? timeZoneAt(coords[0]) : null), [coords]);
+
   useEffect(() => save("coords", coords), [coords]);
+  useEffect(() => save("orders", orders), [orders]);
+  useEffect(() => save("tableSettings", tableSettings), [tableSettings]);
   useEffect(() => save("precision", precision), [precision]);
 
   // Input pasted into a text field: show the whole line.
@@ -38,9 +50,14 @@ export function App() {
         />
         <MapView coords={coords} onChange={setCoords} drawMode={drawMode} fitToken={fitToken} />
       </div>
-      <section className="part-b placeholder">
-        Orders table (pickup / dropoff generator) arrives in the next stage.
-      </section>
+      <OrdersTable
+        coords={coords}
+        detectedTimeZone={detectedTimeZone}
+        orders={orders}
+        onOrdersChange={setOrders}
+        settings={tableSettings}
+        onSettingsChange={setTableSettings}
+      />
     </div>
   );
 }
