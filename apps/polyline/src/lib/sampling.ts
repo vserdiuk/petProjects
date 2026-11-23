@@ -144,3 +144,15 @@ export function distanceToLine(p: LngLat, coords: LngLat[]): { distance: number;
   }
   return best;
 }
+
+/** The part of the line between two along-distances (in either order), including the cut points. */
+export function sliceAlong(coords: LngLat[], from: number, to: number): LngLat[] {
+  if (coords.length < 2) return [];
+  const cum = cumulativeLengths(coords);
+  const [a, b] = from <= to ? [from, to] : [to, from];
+  const start = pointAlong(coords, cum, a).point;
+  const end = pointAlong(coords, cum, b).point;
+  const inner = coords.filter((_, i) => cum[i] > a && cum[i] < b);
+  const out = [start, ...inner, end];
+  return from <= to ? out : out.reverse();
+}

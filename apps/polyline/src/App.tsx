@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { MapView } from "./components/MapView";
 import { PolylinePanel } from "./components/PolylinePanel";
 import { DEFAULT_TABLE_SETTINGS, OrdersTable, type TableSettings } from "./components/OrdersTable";
-import type { Order } from "./lib/orders";
+import { alongOf, DEFAULT_COLUMNS, readPoint, type Order } from "./lib/orders";
+import { sliceAlong } from "./lib/sampling";
 import { timeZoneAt } from "./lib/time";
 import { useAddressFill } from "./lib/useAddressFill";
 import type { Precision } from "./lib/polyline";
@@ -20,6 +21,20 @@ export function App() {
     ...DEFAULT_TABLE_SETTINGS,
     ...load<Partial<TableSettings>>("tableSettings", {}),
   }));
+  const [columns, setColumns] = useState<string[]>(() => load<string[]>("columns", [...DEFAULT_COLUMNS]));
+  useEffect(() => save("columns", columns), [columns]);
+  const [hovered, setHovered] = useState<Order | null>(null);
+  const highlight = useMemo(() => {
+    if (!hovered) return null;
+    const pickup = readPoint(hovered, "pickup");
+    const dropoff = readPoint(hovered, "dropoff");
+    const a = alongOf(hovered, "pickup", coords);
+    const b = alongOf(hovered, "dropoff", coords);
+    const route =
+      pickup && dropoff && a != null && b != null ? [pickup, ...sliceAlong(coords, a, b), dropoff] : [];
+    return { pickup, dropoff, route };
+  }, [hovered, coords]);
+
   const geocoding = useAddressFill(orders, setOrders, tableSettings.autoAddresses);
   const detectedTimeZone = useMemo(() => (coords.length ? timeZoneAt(coords[0]) : null), [coords]);
 
@@ -50,7 +65,7 @@ export function App() {
           onPrecisionChange={setPrecision}
           onDrawModeChange={setDrawMode}
         />
-        <MapView coords={coords} onChange={setCoords} drawMode={drawMode} fitToken={fitToken} />
+        <MapView coords={coords} onChange={setCoords} drawMode={drawMode} fitToken={fitToken} highlight={highlight} />
       </div>
       <OrdersTable
         coords={coords}
@@ -60,6 +75,12 @@ export function App() {
         settings={tableSettings}
         onSettingsChange={setTableSettings}
         geocoding={geocoding}
+        columns={columns}
+        onColumnsChange={(nextColumns, nextOrders) => {
+          setColumns(nextColumns);
+          setOrders(nextOrders);
+        }}
+        onHoverOrder={setHovered}
       />
     </div>
   );

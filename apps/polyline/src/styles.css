@@ -97,3 +97,35 @@ textarea[aria-invalid="true"] { border-color: var(--danger); }
 .geo-status button { padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; }
 .spinner { width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Custom columns */
+.orders th.warn { background: #fff4d6; }
+.orders th.bad { background: #fde3e1; }
+@media (prefers-color-scheme: dark) {
+  .orders th.warn { background: #4a3b12; }
+  .orders th.bad { background: #4d1f1b; }
+}
+.orders th.custom { padding: 4px 6px; vertical-align: top; }
+.col-head { display: flex; gap: 4px; align-items: center; }
+.col-head input { border: 1px dashed var(--border); border-radius: 4px; padding: 2px 4px; background: transparent; color: var(--text); font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.col-head input[aria-invalid="true"] { border-color: var(--danger); border-style: solid; }
+.col-head button { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0 2px; }
+.col-msg { font: 11px system-ui, sans-serif; margin-top: 2px; white-space: normal; max-width: 220px; }
+.col-msg.warn { color: #9a6700; }
+.col-msg.bad { color: var(--danger); }
+.orders th.add-col button { padding: 2px 8px; border: 1px dashed var(--border); border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; font: 12px system-ui, sans-serif; }
+.orders td.add-col { min-width: 40px; }
+
+/* Generated value pickers */
+.cell { display: flex; align-items: center; min-width: 100%; }
+.cell input { flex: 1 1 auto; min-width: 0 !important; }
+.cell .gen { border: 0; background: transparent; cursor: pointer; padding: 0 6px; font-size: 13px; opacity: .6; }
+.cell .gen:hover { opacity: 1; }
+.picker-backdrop { position: fixed; inset: 0; z-index: 10; }
+.picker { position: fixed; z-index: 11; margin: 0; padding: 4px; list-style: none; width: 400px; max-width: calc(100vw - 32px);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.15); }
+.picker button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 6px 8px; border-radius: 6px; cursor: pointer; white-space: normal; font-size: 13px; }
+.picker button:hover { background: var(--bg); }
+.picker-foot { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
+.picker-foot button { color: var(--accent); }
+.orders tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }

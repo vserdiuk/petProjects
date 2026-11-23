@@ -1,8 +1,14 @@
 import { useMemo, useState } from "react";
+import { ColumnHeader } from "./ColumnHeader";
+import { areSimilar } from "../lib/columns";
+import { memoOptions, nameOptions } from "../lib/names";
 import {
   createOrder,
-  DEFAULT_COLUMNS,
+  dropColumnFromOrders,
   editCell,
+  isDefaultColumn,
+  renameColumnInOrders,
+  setGenerated,
   endIsManual,
   nextId,
   regenerateEnd,
@@ -43,6 +49,16 @@ type Props = {
   settings: TableSettings;
   onSettingsChange: (s: TableSettings) => void;
   geocoding: { pending: number; failed: number; stop: () => void; retry: () => void };
+  columns: string[];
+  onColumnsChange: (columns: string[], orders: Order[]) => void;
+  onHoverOrder: (order: Order | null) => void;
+};
+
+type Picker = { key: string; column: string; options: string[]; x: number; y: number };
+
+const GENERATED_PICKERS: Record<string, { label: string; title: string }> = {
+  contact_name: { label: "🎲", title: "Pick a generated name" },
+  memo: { label: "✎", title: "Pick a generated memo" },
 };
 
 const MAX_BATCH = 500;
@@ -63,9 +79,50 @@ export function OrdersTable({
   settings,
   onSettingsChange,
   geocoding,
+  columns,
+  onColumnsChange,
+  onHoverOrder,
 }: Props) {
   const [error, setError] = useState<string | null>(null);
-  const columns = DEFAULT_COLUMNS as readonly string[];
+  const [picker, setPicker] = useState<Picker | null>(null);
+  const [focusColumn, setFocusColumn] = useState<string | null>(null);
+
+  // Columns that have a similar-named sibling, for highlighting.
+  const similar = useMemo(() => {
+    const out = new Set<string>();
+    columns.forEach((a, i) =>
+      columns.forEach((b, j) => {
+        if (i < j && !(isDefaultColumn(a) && isDefaultColumn(b)) && areSimilar(a, b)) {
+          out.add(a);
+          out.add(b);
+        }
+      }),
+    );
+    return out;
+  }, [columns]);
+
+  const addColumn = () => {
+    let n = 1;
+    while (columns.includes(`column_${n}`)) n++;
+    const name = `column_${n}`;
+    setFocusColumn(name);
+    onColumnsChange([...columns, name], orders);
+  };
+  const renameColumn = (from: string, to: string) =>
+    onColumnsChange(columns.map((c) => (c === from ? to : c)), renameColumnInOrders(orders, from, to));
+  const removeColumn = (name: string) =>
+    onColumnsChange(columns.filter((c) => c !== name), dropColumnFromOrders(orders, name));
+
+  const openPicker = (o: Order, column: string, target: HTMLElement) => {
+    const r = target.getBoundingClientRect();
+    const options = column === "memo" ? memoOptions(o.values) : nameOptions(5);
+    setPicker({ key: o.key, column, options, x: Math.min(r.left, window.innerWidth - 420), y: r.bottom + 4 });
+  };
+  const choose = (value: string) => {
+    if (!picker) return;
+    onOrdersChange(orders.map((o) => (o.key === picker.key ? setGenerated(o, picker.column, value) : o)));
+    setPicker(null);
+  };
 
   const override = settings.timeZoneOverride.trim();
   const overrideValid = override === "" || isValidTimeZone(override);
@@ -213,21 +270,39 @@ export function OrdersTable({
                   +
                 </button>
               </th>
-              {columns.map((c) => (
-                <th key={c}>{c}</th>
-              ))}
+              {columns.map((c) =>
+                isDefaultColumn(c) ? (
+                  <th key={c} className={similar.has(c) ? "warn" : undefined}>
+                    {c}
+                  </th>
+                ) : (
+                  <ColumnHeader
+                    key={c}
+                    name={c}
+                    others={columns.filter((o) => o !== c)}
+                    autoFocus={focusColumn === c}
+                    onRename={(next) => renameColumn(c, next)}
+                    onRemove={() => removeColumn(c)}
+                  />
+                ),
+              )}
+              <th className="add-col">
+                <button type="button" title="Add a column" onClick={addColumn}>
+                  + column
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
             {orders.length === 0 && (
               <tr>
-                <td className="empty" colSpan={columns.length + 1}>
+                <td className="empty" colSpan={columns.length + 2}>
                   Press + to generate an order along the polyline.
                 </td>
               </tr>
             )}
             {orders.map((o) => (
-              <tr key={o.key}>
+              <tr key={o.key} onMouseEnter={() => onHoverOrder(o)} onMouseLeave={() => onHoverOrder(null)}>
                 <td className="actions">
                   <button
                     type="button"
@@ -251,6 +326,7 @@ export function OrdersTable({
                 </td>
                 {columns.map((c) => (
                   <td key={c} className={o.manual.includes(c) ? "manual" : undefined}>
+                    <div className="cell">
                     <input
                       aria-label={`${c} row ${o.values.id}`}
                       value={o.values[c] ?? ""}
@@ -258,13 +334,46 @@ export function OrdersTable({
                       onChange={(e) => update(o.key, c, e.target.value)}
                       title={o.manual.includes(c) ? "Edited by hand: generation keeps it. Clear the cell to release it." : undefined}
                     />
+                    {GENERATED_PICKERS[c] && (
+                      <button
+                        type="button"
+                        className="gen"
+                        title={GENERATED_PICKERS[c].title}
+                        onClick={(e) => openPicker(o, c, e.currentTarget)}
+                      >
+                        {GENERATED_PICKERS[c].label}
+                      </button>
+                    )}
+                    </div>
                   </td>
                 ))}
+                <td className="add-col" />
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {picker && (
+        <>
+          <div className="picker-backdrop" onClick={() => setPicker(null)} />
+          <ul className="picker" style={{ left: picker.x, top: picker.y }} role="listbox">
+            {picker.options.map((opt) => (
+              <li key={opt}>
+                <button type="button" onClick={() => choose(opt)}>
+                  {opt}
+                </button>
+              </li>
+            ))}
+            {picker.column !== "memo" && (
+              <li className="picker-foot">
+                <button type="button" onClick={() => setPicker({ ...picker, options: nameOptions(5) })}>
+                  More names
+                </button>
+              </li>
+            )}
+          </ul>
+        </>
+      )}
       <p className="hint">
         {orders.length} rows · time zone {timeZone}. Cells you edit by hand (marked) are never overwritten by
         generation; clear a cell to release it.
