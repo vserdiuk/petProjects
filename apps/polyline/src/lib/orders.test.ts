@@ -53,3 +53,19 @@ describe("csv", () => {
     );
   });
 });
+
+import { addressJobs, applyAddress } from "./orders";
+
+describe("address fill", () => {
+  it("lists ends with empty addresses and fills them unless moved or pinned", () => {
+    let o = createOrder(1, [...DEFAULT_COLUMNS], LINE, SETTINGS, NOW);
+    expect(addressJobs([o]).map((j) => j.end)).toEqual(["pickup", "dropoff"]);
+    o = editCell(o, "pickup.address_local", "manual");
+    const job = addressJobs([o])[0];
+    const filled = applyAddress(o, "pickup", job.point, { en: "EN", local: "LOCAL" });
+    expect(filled.values["pickup.address_en"]).toBe("EN");
+    expect(filled.values["pickup.address_local"]).toBe("manual");
+    const moved = regenerateEnd(o, "pickup", LINE, SETTINGS);
+    expect(applyAddress(moved, "pickup", job.point, { en: "EN", local: "L" })).toBe(moved);
+  });
+});

@@ -154,3 +154,30 @@ export function editCell(order: Order, column: string, value: string): Order {
 export function nextId(orders: Order[]): number {
   return orders.reduce((max, o) => Math.max(max, parseInt(o.values.id, 10) || 0), 0) + 1;
 }
+
+export type AddressJob = { key: string; end: End; point: LngLat };
+
+/** Ends whose address cells are empty (and not pinned by hand) and whose coordinates are valid. */
+export function addressJobs(orders: Order[]): AddressJob[] {
+  const jobs: AddressJob[] = [];
+  for (const o of orders) {
+    for (const end of ["pickup", "dropoff"] as End[]) {
+      const [, , enCol, localCol] = endColumns(end);
+      const wants = [enCol, localCol].some((c) => (o.values[c] ?? "") === "" && !o.manual.includes(c));
+      const point = readPoint(o, end);
+      if (wants && point) jobs.push({ key: o.key, end, point });
+    }
+  }
+  return jobs;
+}
+
+/** Fill empty, non-manual address cells, only if the end has not moved since the lookup started. */
+export function applyAddress(order: Order, end: End, point: LngLat, address: { en: string; local: string }): Order {
+  const current = readPoint(order, end);
+  if (!current || current[0] !== point[0] || current[1] !== point[1]) return order;
+  const [, , enCol, localCol] = endColumns(end);
+  const generated: Record<string, string> = {};
+  if ((order.values[enCol] ?? "") === "") generated[enCol] = address.en;
+  if ((order.values[localCol] ?? "") === "") generated[localCol] = address.local;
+  return assign(order, generated);
+}

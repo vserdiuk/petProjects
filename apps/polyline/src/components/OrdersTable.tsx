@@ -22,6 +22,8 @@ export type TableSettings = {
   /** Empty = detect from the polyline. */
   timeZoneOverride: string;
   batchSize: number;
+  /** Fill addresses through Nominatim. */
+  autoAddresses: boolean;
 };
 
 export const DEFAULT_TABLE_SETTINGS: TableSettings = {
@@ -30,6 +32,7 @@ export const DEFAULT_TABLE_SETTINGS: TableSettings = {
   windowHours: 8,
   timeZoneOverride: "",
   batchSize: 10,
+  autoAddresses: true,
 };
 
 type Props = {
@@ -39,6 +42,7 @@ type Props = {
   onOrdersChange: (next: Order[]) => void;
   settings: TableSettings;
   onSettingsChange: (s: TableSettings) => void;
+  geocoding: { pending: number; failed: number; stop: () => void; retry: () => void };
 };
 
 const MAX_BATCH = 500;
@@ -51,7 +55,15 @@ const ALL_ZONES: string[] = (() => {
   }
 })();
 
-export function OrdersTable({ coords, detectedTimeZone, orders, onOrdersChange, settings, onSettingsChange }: Props) {
+export function OrdersTable({
+  coords,
+  detectedTimeZone,
+  orders,
+  onOrdersChange,
+  settings,
+  onSettingsChange,
+  geocoding,
+}: Props) {
   const [error, setError] = useState<string | null>(null);
   const columns = DEFAULT_COLUMNS as readonly string[];
 
@@ -153,6 +165,41 @@ export function OrdersTable({ coords, detectedTimeZone, orders, onOrdersChange, 
         <button type="button" disabled={!orders.length} onClick={() => onOrdersChange([])}>
           Clear table
         </button>
+      </div>
+      <div className="geo-bar">
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={settings.autoAddresses}
+            onChange={(e) => {
+              if (!e.target.checked) geocoding.stop();
+              set("autoAddresses", e.target.checked);
+            }}
+          />
+          Fill addresses (OpenStreetMap Nominatim, 1 request/s)
+        </label>
+        {geocoding.pending > 0 && (
+          <span className="geo-status" role="status">
+            <span className="spinner" aria-hidden /> Looking up {geocoding.pending} point{geocoding.pending === 1 ? "" : "s"}…
+            <button
+              type="button"
+              onClick={() => {
+                geocoding.stop();
+                set("autoAddresses", false);
+              }}
+            >
+              Stop
+            </button>
+          </span>
+        )}
+        {geocoding.failed > 0 && geocoding.pending === 0 && (
+          <span className="geo-status error">
+            {geocoding.failed} lookup{geocoding.failed === 1 ? "" : "s"} failed
+            <button type="button" onClick={geocoding.retry}>
+              Retry
+            </button>
+          </span>
+        )}
       </div>
       {!overrideValid && <p className="error">Unknown time zone "{override}", using {timeZone}.</p>}
       {error && <p className="error banner">{error}</p>}

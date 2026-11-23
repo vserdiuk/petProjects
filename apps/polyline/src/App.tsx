@@ -4,6 +4,7 @@ import { PolylinePanel } from "./components/PolylinePanel";
 import { DEFAULT_TABLE_SETTINGS, OrdersTable, type TableSettings } from "./components/OrdersTable";
 import type { Order } from "./lib/orders";
 import { timeZoneAt } from "./lib/time";
+import { useAddressFill } from "./lib/useAddressFill";
 import type { Precision } from "./lib/polyline";
 import { load, save } from "./lib/storage";
 import type { LngLat } from "./lib/types";
@@ -19,6 +20,7 @@ export function App() {
     ...DEFAULT_TABLE_SETTINGS,
     ...load<Partial<TableSettings>>("tableSettings", {}),
   }));
+  const geocoding = useAddressFill(orders, setOrders, tableSettings.autoAddresses);
   const detectedTimeZone = useMemo(() => (coords.length ? timeZoneAt(coords[0]) : null), [coords]);
 
   useEffect(() => save("coords", coords), [coords]);
@@ -57,6 +59,7 @@ export function App() {
         onOrdersChange={setOrders}
         settings={tableSettings}
         onSettingsChange={setTableSettings}
+        geocoding={geocoding}
       />
     </div>
   );
