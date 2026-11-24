@@ -17,7 +17,8 @@ import type { Dict } from "./i18n/dict";
 import { useI18n } from "./i18n/I18n";
 import { dominantSize, findIssues, formatBytes, formatLabel, moveItem, naturalCompare, sizeKey, type Issue } from "./lib/analyze";
 import { readImage, render, withExt } from "./lib/image";
-import { buildPdf, type PdfImage } from "./lib/pdf";
+import type { PdfImage, PdfProgress } from "./lib/pdf";
+import { buildPdfInWorker } from "./lib/pdfClient";
 import { DEFAULT_SETTINGS, type ImageItem, type Note, type PageMode, type Settings, type Size } from "./lib/types";
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif|bmp|avif|svg)$/i;
@@ -37,6 +38,8 @@ export function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [dragFiles, setDragFiles] = useState(false);
   const [viewing, setViewing] = useState<ImageItem | null>(null);
+  const [pdfProgress, setPdfProgress] = useState<PdfProgress | null>(null);
+  const pdfAbort = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const itemsRef = useRef(items);
@@ -158,12 +161,16 @@ export function App() {
   // ---------- PDF ----------
   const makePdf = async (): Promise<Blob | null> => {
     setBusy("busyPdf");
+    setPdfProgress(null);
+    const abort = new AbortController();
+    pdfAbort.current = abort;
     try {
       const images: PdfImage[] = [];
       for (const it of items) {
         // pdf-lib can embed only PNG and JPG; anything else is converted on the fly.
         const ready = it.mime === "image/png" || it.mime === "image/jpeg";
         const blob = ready ? it.blob : await render(it, { mime: "image/png" });
+        if (abort.signal.aborted) throw new DOMException("cancelled", "AbortError");
         images.push({
           width: it.width,
           height: it.height,
@@ -171,16 +178,25 @@ export function App() {
           bytes: await blob.arrayBuffer(),
         });
       }
-      const bytes = await buildPdf(images, settings, target);
+      // Heavy work (PNG decoding/compression in pdf-lib) runs in a Web Worker.
+      const bytes = await buildPdfInWorker(images, settings, target, setPdfProgress, abort.signal);
       return new Blob([bytes as BlobPart], { type: "application/pdf" });
     } catch (e) {
-      console.error(e);
-      say((t) => t.msgPdfFail);
+      if (e instanceof DOMException && e.name === "AbortError") say((t) => t.msgCancelled);
+      else {
+        console.error(e);
+        say((t) => t.msgPdfFail);
+      }
       return null;
     } finally {
+      pdfAbort.current = null;
+      setPdfProgress(null);
       setBusy(null);
     }
   };
+  const cancelPdf = () => pdfAbort.current?.abort();
+  // Stop a running build if the app is closed.
+  useEffect(() => () => pdfAbort.current?.abort(), []);
 
   const fileName = withExt((settings.fileName.trim() || "images").replace(/\.pdf$/i, "") + ".x", "pdf");
 
@@ -418,7 +434,27 @@ export function App() {
           <button disabled={!items.length || !!busy} onClick={openPdf}>
             {t.openPdf}
           </button>
-          {busy && <p className="busy">{t[busy]}</p>}
+          {busy === "busyPdf" ? (
+            <div className="progress" role="status" aria-live="polite">
+              <div className="progress-head">
+                <span>
+                  {pdfProgress?.stage === "save"
+                    ? t.progressSave
+                    : pdfProgress
+                      ? t.progressPage(pdfProgress.done + 1, pdfProgress.total)
+                      : t.busyPdf}
+                </span>
+                <button className="link" onClick={cancelPdf}>{t.cancel}</button>
+              </div>
+              <progress
+                max={1}
+                value={pdfProgress ? (pdfProgress.stage === "save" ? 0.9 : (0.9 * pdfProgress.done) / pdfProgress.total) : 0}
+              />
+              <small>{t.progressNote}</small>
+            </div>
+          ) : (
+            busy && <p className="busy">{t[busy]}</p>
+          )}
         </aside>
       </div>
 

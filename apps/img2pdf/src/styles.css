@@ -169,3 +169,8 @@ legend, .field > span { font-weight: 600; margin-bottom: 4px; }
 .lang-options button.suggested { border-color: var(--accent); }
 .lang-dialog .hint { margin: 0; }
 .flag { font-size: 20px; }
+
+/* PDF progress */
+.progress { display: flex; flex-direction: column; gap: 6px; }
+.progress-head { display: flex; justify-content: space-between; align-items: center; color: var(--accent); }
+.progress progress { width: 100%; height: 8px; accent-color: var(--accent); }

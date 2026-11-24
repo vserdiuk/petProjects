@@ -10,13 +10,21 @@ export function hexToRgb(hex: string) {
   return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
 }
 
-export async function buildPdf(images: PdfImage[], settings: Settings, target: Size | null): Promise<Uint8Array> {
+export type PdfProgress = { stage: "page"; done: number; total: number } | { stage: "save" };
+
+export async function buildPdf(
+  images: PdfImage[],
+  settings: Settings,
+  target: Size | null,
+  onProgress?: (p: PdfProgress) => void,
+): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.setTitle(settings.fileName || "images");
   doc.setCreator("Pet projects · Images → PDF");
   const isWhite = /^#?f{6}$/i.test(settings.background.trim());
 
-  for (const img of images) {
+  for (const [i, img] of images.entries()) {
+    onProgress?.({ stage: "page", done: i, total: images.length });
     const embedded = img.mime === "image/png" ? await doc.embedPng(img.bytes) : await doc.embedJpg(img.bytes);
     const { page: size, box, image } = pageLayout(img, settings, target);
     const page = doc.addPage([size.width, size.height]);
@@ -26,5 +34,6 @@ export async function buildPdf(images: PdfImage[], settings: Settings, target: S
     page.drawImage(embedded, { x: image.x, y: H - image.y - image.height, width: image.width, height: image.height });
     page.pushOperators(popGraphicsState());
   }
+  onProgress?.({ stage: "save" });
   return doc.save();
 }
