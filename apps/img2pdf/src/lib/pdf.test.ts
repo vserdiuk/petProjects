@@ -34,4 +34,11 @@ describe("buildPdf", () => {
       { width: 300, height: 450 },
     ]);
   });
+
+  it("reports progress for every page and then the save step", async () => {
+    const imgs = [1, 2, 3].map(() => ({ mime: "image/png" as const, bytes: PNG, width: 10, height: 10 }));
+    const seen: string[] = [];
+    await buildPdf(imgs, DEFAULT_SETTINGS, null, (p) => seen.push(p.stage === "page" ? `${p.done}/${p.total}` : "save"));
+    expect(seen).toEqual(["0/3", "1/3", "2/3", "save"]);
+  });
 });
