@@ -1,8 +1,10 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useRef } from "react";
+import { useI18n } from "../i18n/I18n";
+import type { Dict } from "../i18n/dict";
 import { formatBytes, formatLabel, sizeKey, type Issue } from "../lib/analyze";
-import type { ImageItem } from "../lib/types";
+import type { ImageItem, Note } from "../lib/types";
 
 type Props = {
   item: ImageItem;
@@ -20,14 +22,21 @@ type Props = {
   onOpen: () => void;
 };
 
+export function noteText(t: Dict, n: Note): string {
+  if (n.kind === "convert") return t.noteConvert(n.from);
+  if (n.kind === "resize") return t.noteResize(n.from, n.to);
+  return t.noteCompress(formatBytes(n.from), formatBytes(n.to));
+}
+
 export function ImageCard({ item, index, total, issues, busy, ...on }: Props) {
+  const { t } = useI18n();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   const fileRef = useRef<HTMLInputElement>(null);
   const style = { transform: CSS.Translate.toString(transform), transition };
 
   return (
     <li ref={setNodeRef} style={style} className={`card${isDragging ? " dragging" : ""}${issues.length ? " warn" : ""}`}>
-      <div className="thumb" {...attributes} {...listeners} title="Перетягніть, щоб змінити порядок">
+      <div className="thumb" {...attributes} {...listeners} title={t.dragHint}>
         <span className="num">{index + 1}</span>
         <img src={item.url} alt={item.name} draggable={false} onClick={on.onOpen} />
       </div>
@@ -39,7 +48,7 @@ export function ImageCard({ item, index, total, issues, busy, ...on }: Props) {
           <span className={issues.some((i) => i.kind === "size") ? "bad" : ""}>{sizeKey(item)}</span>
           <span className={issues.some((i) => i.kind === "heavy") ? "bad" : ""}>{formatBytes(item.size)}</span>
         </div>
-        {item.notes.length > 0 && <div className="notes">✓ {item.notes.join(", ")}</div>}
+        {item.notes.length > 0 && <div className="notes">✓ {item.notes.map((n) => noteText(t, n)).join(", ")}</div>}
       </div>
 
       {issues.length > 0 && (
@@ -48,24 +57,24 @@ export function ImageCard({ item, index, total, issues, busy, ...on }: Props) {
             <li key={is.kind}>
               {is.kind === "format" && (
                 <>
-                  <span>⚠ Формат {is.label}, а не PNG</span>
-                  <button disabled={busy} onClick={on.onConvert}>Зробити PNG</button>
+                  <span>⚠ {t.issueFormat(is.label)}</span>
+                  <button disabled={busy} onClick={on.onConvert}>{t.makePng}</button>
                 </>
               )}
               {is.kind === "size" && (
                 <>
                   <span>
-                    ⚠ Розмір відрізняється від {sizeKey(is.expected)}
-                    {!is.sameRatio && " (інші пропорції)"}
+                    ⚠ {t.issueSize(sizeKey(is.expected))}
+                    {!is.sameRatio && ` ${t.otherRatio}`}
                   </span>
-                  <button disabled={busy} onClick={on.onFit}>Підігнати</button>
-                  <button disabled={busy} className="link" onClick={on.onMakeTarget}>Зробити основним</button>
+                  <button disabled={busy} onClick={on.onFit}>{t.fit}</button>
+                  <button disabled={busy} className="link" onClick={on.onMakeTarget}>{t.makeMain}</button>
                 </>
               )}
               {is.kind === "heavy" && (
                 <>
-                  <span>⚠ Файл у {is.times}× важчий за інші</span>
-                  <button disabled={busy} onClick={on.onOptimize}>Стиснути</button>
+                  <span>⚠ {t.issueHeavy(is.times)}</span>
+                  <button disabled={busy} onClick={on.onOptimize}>{t.compress}</button>
                 </>
               )}
             </li>
@@ -74,11 +83,11 @@ export function ImageCard({ item, index, total, issues, busy, ...on }: Props) {
       )}
 
       <div className="actions">
-        <button aria-label="Перемістити раніше" title="Раніше" disabled={index === 0} onClick={() => on.onMove(index - 1)}>←</button>
-        <button aria-label="Перемістити пізніше" title="Пізніше" disabled={index === total - 1} onClick={() => on.onMove(index + 1)}>→</button>
+        <button aria-label={t.earlier} title={t.earlier} disabled={index === 0} onClick={() => on.onMove(index - 1)}>←</button>
+        <button aria-label={t.later} title={t.later} disabled={index === total - 1} onClick={() => on.onMove(index + 1)}>→</button>
         <span className="spacer" />
-        <button disabled={busy} onClick={() => fileRef.current?.click()}>Замінити</button>
-        <button className="danger" onClick={on.onRemove} aria-label="Видалити" title="Видалити">✕</button>
+        <button disabled={busy} onClick={() => fileRef.current?.click()}>{t.replace}</button>
+        <button className="danger" onClick={on.onRemove} aria-label={t.remove} title={t.remove}>✕</button>
         <input
           ref={fileRef}
           type="file"
