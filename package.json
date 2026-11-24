@@ -5,6 +5,7 @@
   "scripts": {
     "dev:portal": "pnpm --filter portal dev",
     "dev:polyline": "pnpm --filter polyline dev",
+    "dev:img2pdf": "pnpm --filter img2pdf dev",
     "build": "pnpm -r --filter \"./apps/**\" build && node scripts/assemble.mjs",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test"

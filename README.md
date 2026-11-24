@@ -7,6 +7,7 @@ dependencies and build; the portal is just an index page that links to them.
 apps/
   portal/      index page (reads projects.json)
   polyline/    Polyline delivery generator
+  img2pdf/     Images → PDF (e.g. comic pages)
 projects.json  registry of projects shown on the portal
 scripts/assemble.mjs  merges all builds into one static dist/
 docs/          specs
