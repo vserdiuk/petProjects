@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useI18n } from "../i18n/I18n";
 import { pageLayout, ptToMm, type Rect } from "../lib/layout";
 import type { ImageItem, Settings, Size } from "../lib/types";
 
@@ -12,14 +13,15 @@ const rectStyle = (r: Rect, page: Size) => ({
 
 /** Renders the pages exactly as they will be laid out in the PDF. */
 export function Preview({ items, settings, target }: { items: ImageItem[]; settings: Settings; target: Size | null }) {
+  const { t } = useI18n();
   const [width, setWidth] = useState(220);
-  if (!items.length) return <p className="empty">Додайте картинки, щоб побачити сторінки PDF.</p>;
+  if (!items.length) return <p className="empty">{t.previewEmpty}</p>;
   return (
     <>
     <label className="zoom">
-      Масштаб
+      {t.zoom}
       <input type="range" min={140} max={800} step={20} value={width} onChange={(e) => setWidth(Number(e.target.value))} />
-      <small>(клік по сторінці — збільшити)</small>
+      <small>{t.zoomHint}</small>
     </label>
     <ol className="pages" style={{ ["--page-w" as string]: `${width}px` }}>
       {items.map((it, i) => {
@@ -34,7 +36,7 @@ export function Preview({ items, settings, target }: { items: ImageItem[]; setti
               </div>
             </div>
             <div className="caption">
-              Сторінка {i + 1} · {ptToMm(page.width)}×{ptToMm(page.height)} мм · <span title={it.name}>{it.name}</span>
+              {t.pageCaption(i + 1, ptToMm(page.width), ptToMm(page.height))} · <span title={it.name}>{it.name}</span>
             </div>
           </li>
         );

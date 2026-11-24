@@ -11,23 +11,30 @@ import {
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ImageCard } from "./components/ImageCard";
+import { LanguageDialog, LanguageSwitch } from "./components/Language";
 import { Preview } from "./components/Preview";
+import type { Dict } from "./i18n/dict";
+import { useI18n } from "./i18n/I18n";
 import { dominantSize, findIssues, formatBytes, formatLabel, moveItem, naturalCompare, sizeKey, type Issue } from "./lib/analyze";
 import { readImage, render, withExt } from "./lib/image";
 import { buildPdf, type PdfImage } from "./lib/pdf";
-import { plural } from "./lib/plural";
-import { DEFAULT_SETTINGS, type ImageItem, type PageMode, type Settings, type Size } from "./lib/types";
+import { DEFAULT_SETTINGS, type ImageItem, type Note, type PageMode, type Settings, type Size } from "./lib/types";
 
 const IMAGE_EXT = /\.(png|jpe?g|webp|gif|bmp|avif|svg)$/i;
 const isImage = (f: File) => f.type.startsWith("image/") || IMAGE_EXT.test(f.name);
 
+/** Messages are kept as functions so they follow a language switch. */
+type Message = (t: Dict) => string;
+type BusyKey = "busyRead" | "busyPng" | "busyFit" | "busyCompress" | "busyPdf";
+
 export function App() {
+  const { t, chosen } = useI18n();
   const [items, setItems] = useState<ImageItem[]>([]);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [targetOverride, setTargetOverride] = useState<Size | null>(null);
   const [tab, setTab] = useState<"list" | "preview">("list");
-  const [busy, setBusy] = useState<string | null>(null);
-  const [messages, setMessages] = useState<string[]>([]);
+  const [busy, setBusy] = useState<BusyKey | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [dragFiles, setDragFiles] = useState(false);
   const [viewing, setViewing] = useState<ImageItem | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,21 +54,27 @@ export function App() {
   }, [issues]);
   const totalBytes = items.reduce((s, i) => s + i.size, 0);
 
-  const say = (msg: string) => setMessages((m) => [...m, msg]);
+  const say = (msg: Message) => setMessages((m) => [...m, msg]);
 
   // ---------- adding / replacing ----------
   const addFiles = useCallback(async (list: FileList | File[]) => {
     const files = [...list];
     const skipped = files.filter((f) => !isImage(f));
     const images = files.filter(isImage).sort((a, b) => naturalCompare(a.name, b.name));
-    if (skipped.length) say(`Пропущено (не картинки): ${skipped.map((f) => f.name).join(", ")}`);
+    if (skipped.length) {
+      const names = skipped.map((f) => f.name).join(", ");
+      say((t) => t.msgSkipped(names));
+    }
     if (!images.length) return;
-    setBusy("Читаю файли…");
+    setBusy("busyRead");
     const results = await Promise.allSettled(images.map((f) => readImage(f, f.name)));
     const ok: ImageItem[] = [];
     const failed: string[] = [];
     results.forEach((r, i) => (r.status === "fulfilled" ? ok.push(r.value) : failed.push(images[i].name)));
-    if (failed.length) say(`Браузер не зміг відкрити: ${failed.join(", ")}. Збережіть їх як PNG або JPG.`);
+    if (failed.length) {
+      const names = failed.join(", ");
+      say((t) => t.msgDecodeFail(names));
+    }
     setItems((prev) => [...prev, ...ok]);
     setBusy(null);
   }, []);
@@ -76,7 +89,7 @@ export function App() {
     try {
       swap(item, await readImage(file, file.name));
     } catch {
-      say(`Браузер не зміг відкрити ${file.name}.`);
+      say((t) => t.msgDecodeFail(file.name));
     }
   };
 
@@ -95,36 +108,34 @@ export function App() {
   // ---------- fixes ----------
   const toPng = async (item: ImageItem) => {
     const blob = await render(item, { mime: "image/png" });
-    return readImage(blob, withExt(item.name, "png"), [...item.notes, `${formatLabel(item.mime)} → PNG`]);
+    return readImage(blob, withExt(item.name, "png"), [...item.notes, { kind: "convert", from: formatLabel(item.mime) }]);
   };
 
   const toSize = async (item: ImageItem, size: Size) => {
     const blob = await render(item, { mime: "image/png", size, fit: settings.fit, background: settings.background });
-    const note = `${sizeKey(item)} → ${sizeKey(size)}` + (item.mime !== "image/png" ? `, ${formatLabel(item.mime)} → PNG` : "");
-    return readImage(blob, withExt(item.name, "png"), [...item.notes, note]);
+    const notes: Note[] = [...item.notes, { kind: "resize", from: sizeKey(item), to: sizeKey(size) }];
+    if (item.mime !== "image/png") notes.push({ kind: "convert", from: formatLabel(item.mime) });
+    return readImage(blob, withExt(item.name, "png"), notes);
   };
 
   const optimize = async (item: ImageItem) => {
     const jpg = item.mime === "image/jpeg";
     const blob = await render(item, { mime: jpg ? "image/jpeg" : "image/png", quality: 0.9, background: settings.background });
     if (blob.size >= item.size * 0.95) {
-      say(
-        `${item.name}: не вдалося помітно зменшити файл без втрати якості. ` +
-          (jpg ? "" : "Спробуйте зменшити розмір картинки (кнопка «Підігнати»)."),
-      );
+      say((t) => t.msgCompressFail(item.name, jpg));
       return null;
     }
-    return readImage(blob, item.name, [...item.notes, `стиснуто ${formatBytes(item.size)} → ${formatBytes(blob.size)}`]);
+    return readImage(blob, item.name, [...item.notes, { kind: "compress", from: item.size, to: blob.size }]);
   };
 
-  const run = async (label: string, list: ImageItem[], fn: (i: ImageItem) => Promise<ImageItem | null>) => {
+  const run = async (label: BusyKey, list: ImageItem[], fn: (i: ImageItem) => Promise<ImageItem | null>) => {
     setBusy(label);
     for (const item of list) {
       try {
         const next = await fn(item);
         if (next) swap(item, next);
       } catch {
-        say(`Не вдалося обробити ${item.name}.`);
+        say((t) => t.msgProcessFail(item.name));
       }
     }
     setBusy(null);
@@ -146,7 +157,7 @@ export function App() {
 
   // ---------- PDF ----------
   const makePdf = async (): Promise<Blob | null> => {
-    setBusy("Створюю PDF…");
+    setBusy("busyPdf");
     try {
       const images: PdfImage[] = [];
       for (const it of items) {
@@ -164,7 +175,7 @@ export function App() {
       return new Blob([bytes as BlobPart], { type: "application/pdf" });
     } catch (e) {
       console.error(e);
-      say("Не вдалося створити PDF. Спробуйте конвертувати проблемні картинки в PNG.");
+      say((t) => t.msgPdfFail);
       return null;
     } finally {
       setBusy(null);
@@ -182,7 +193,8 @@ export function App() {
     a.download = fileName;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    say(`Готово: ${fileName} (${formatBytes(blob.size)}).`);
+    const size = formatBytes(blob.size);
+    say((t) => t.msgDone(fileName, size));
   };
 
   const openPdf = async () => {
@@ -230,16 +242,18 @@ export function App() {
 
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setSettings((s) => ({ ...s, [k]: v }));
   const modes: { value: PageMode; label: string; hint: string }[] = [
-    { value: "uniform", label: "Однакові сторінки", hint: target ? `усі ${sizeKey(target)} px` : "за найпоширенішим розміром" },
-    { value: "image", label: "Як у картинки", hint: "кожна сторінка свого розміру" },
-    { value: "a4", label: "A4", hint: "для друку" },
+    { value: "uniform", label: t.modeUniform, hint: t.modeUniformHint(target ? sizeKey(target) : null) },
+    { value: "image", label: t.modeImage, hint: t.modeImageHint },
+    { value: "a4", label: t.modeA4, hint: t.modeA4Hint },
   ];
 
   return (
     <div className="app">
       <header className="top">
         <a className="back" href="../">← Pet projects</a>
-        <h1>Картинки → PDF</h1>
+        <h1>{t.title}</h1>
+        <span className="spacer" />
+        <LanguageSwitch />
       </header>
 
       <div className="layout">
@@ -256,16 +270,16 @@ export function App() {
                 e.target.value = "";
               }}
             />
-            <strong>Перетягніть картинки сюди</strong> або натисніть, щоб вибрати
-            <span className="hint">PNG, JPG, WEBP… Нові файли додаються в кінець, відсортовані за назвою.</span>
+            <strong>{t.dropTitle}</strong> {t.dropOr}
+            <span className="hint">{t.dropHint}</span>
           </section>
 
           {messages.length > 0 && (
             <div className="messages">
               {messages.map((m, i) => (
-                <p key={i}>{m}</p>
+                <p key={i}>{m(t)}</p>
               ))}
-              <button className="link" onClick={() => setMessages([])}>Закрити</button>
+              <button className="link" onClick={() => setMessages([])}>{t.close}</button>
             </div>
           )}
 
@@ -275,33 +289,29 @@ export function App() {
                 <div className="summary">
                   {counts.format > 0 && (
                     <p>
-                      <span>
-                        ⚠ {counts.format} {plural(counts.format, ["картинка", "картинки", "картинок"])} не у форматі PNG
-                      </span>
-                      <button disabled={!!busy} onClick={() => run("Конвертую в PNG…", withIssue("format"), toPng)}>
-                        Конвертувати всі в PNG
+                      <span>⚠ {t.sumFormat(counts.format)}</span>
+                      <button disabled={!!busy} onClick={() => run("busyPng", withIssue("format"), toPng)}>
+                        {t.convertAll}
                       </button>
                     </p>
                   )}
                   {counts.size > 0 && target && (
                     <p>
                       <span>
-                        ⚠ {counts.size} {plural(counts.size, ["картинка має", "картинки мають", "картинок мають"])} інший розмір, ніж{" "}
-                        <b>{sizeKey(target)}</b>
-                        {targetOverride ? " (вибраний вами)" : " (у більшості)"}
+                        ⚠ {t.sumSize(counts.size)} <b>{sizeKey(target)}</b> {targetOverride ? t.sumSizeChosen : t.sumSizeMost}
                       </span>
-                      <button disabled={!!busy} onClick={() => run("Підганяю розмір…", withIssue("size"), (i) => toSize(i, target))}>
-                        Підігнати всі
+                      <button disabled={!!busy} onClick={() => run("busyFit", withIssue("size"), (i) => toSize(i, target))}>
+                        {t.fitAll}
                       </button>
                       {targetOverride && (
-                        <button className="link" onClick={() => setTargetOverride(null)}>Скинути основний розмір</button>
+                        <button className="link" onClick={() => setTargetOverride(null)}>{t.resetTarget}</button>
                       )}
                     </p>
                   )}
                   {counts.heavy > 0 && (
                     <p>
-                      <span>⚠ {counts.heavy} {plural(counts.heavy, ["файл", "файли", "файлів"])} значно важч{counts.heavy === 1 ? "ий" : "і"} за інші</span>
-                      <button disabled={!!busy} onClick={() => run("Стискаю…", withIssue("heavy"), optimize)}>Стиснути</button>
+                      <span>⚠ {t.sumHeavy(counts.heavy)}</span>
+                      <button disabled={!!busy} onClick={() => run("busyCompress", withIssue("heavy"), optimize)}>{t.compress}</button>
                     </p>
                   )}
                 </div>
@@ -310,17 +320,17 @@ export function App() {
               <div className="bar">
                 <div className="tabs" role="tablist">
                   <button role="tab" aria-selected={tab === "list"} className={tab === "list" ? "on" : ""} onClick={() => setTab("list")}>
-                    Картинки · {items.length}
+                    {t.tabImages} · {items.length}
                   </button>
                   <button role="tab" aria-selected={tab === "preview"} className={tab === "preview" ? "on" : ""} onClick={() => setTab("preview")}>
-                    Перегляд PDF
+                    {t.tabPreview}
                   </button>
                 </div>
                 <span className="spacer" />
                 {tab === "list" && (
                   <>
-                    <button onClick={sortByName}>Сортувати за назвою</button>
-                    <button className="danger" onClick={clearAll}>Очистити</button>
+                    <button onClick={sortByName}>{t.sortByName}</button>
+                    <button className="danger" onClick={clearAll}>{t.clear}</button>
                   </>
                 )}
               </div>
@@ -340,10 +350,10 @@ export function App() {
                           onMove={(to) => setItems((prev) => moveItem(prev, i, to))}
                           onRemove={() => remove(it)}
                           onReplace={(f) => replaceWithFile(it, f)}
-                          onConvert={() => run("Конвертую в PNG…", [it], toPng)}
-                          onFit={() => target && run("Підганяю розмір…", [it], (x) => toSize(x, target))}
+                          onConvert={() => run("busyPng", [it], toPng)}
+                          onFit={() => target && run("busyFit", [it], (x) => toSize(x, target))}
                           onMakeTarget={() => setTargetOverride({ width: it.width, height: it.height })}
-                          onOptimize={() => run("Стискаю…", [it], optimize)}
+                          onOptimize={() => run("busyCompress", [it], optimize)}
                           onOpen={() => setViewing(it)}
                         />
                       ))}
@@ -360,7 +370,7 @@ export function App() {
         <aside className="side">
           <h2>PDF</h2>
           <fieldset>
-            <legend>Розмір сторінок</legend>
+            <legend>{t.pageSize}</legend>
             {modes.map((m) => (
               <label key={m.value} className="radio">
                 <input type="radio" name="mode" checked={settings.pageMode === m.value} onChange={() => set("pageMode", m.value)} />
@@ -373,54 +383,53 @@ export function App() {
           </fieldset>
 
           <label className="field">
-            <span>Якщо пропорції не збігаються</span>
+            <span>{t.fitLabel}</span>
             <select value={settings.fit} onChange={(e) => set("fit", e.target.value as Settings["fit"])}>
-              <option value="contain">Вписати повністю (з полями)</option>
-              <option value="cover">Заповнити (обрізати краї)</option>
-              <option value="stretch">Розтягнути</option>
+              <option value="contain">{t.fitContain}</option>
+              <option value="cover">{t.fitCover}</option>
+              <option value="stretch">{t.fitStretch}</option>
             </select>
-            <small>Також використовується кнопкою «Підігнати».</small>
+            <small>{t.fitHint}</small>
           </label>
 
           <div className="row">
             <label className="field">
-              <span>Поля, мм</span>
+              <span>{t.margin}</span>
               <input type="number" min={0} max={50} value={settings.margin} onChange={(e) => set("margin", Math.max(0, Number(e.target.value) || 0))} />
             </label>
             <label className="field">
-              <span>Фон</span>
+              <span>{t.background}</span>
               <input type="color" value={settings.background} onChange={(e) => set("background", e.target.value)} />
             </label>
           </div>
 
           <label className="field">
-            <span>Назва файлу</span>
+            <span>{t.fileName}</span>
             <div className="suffix">
               <input value={settings.fileName} onChange={(e) => set("fileName", e.target.value)} placeholder="images" />
               <span>.pdf</span>
             </div>
           </label>
 
-          <p className="stats">
-            {items.length} {plural(items.length, ["сторінка", "сторінки", "сторінок"])} · ≈ {formatBytes(totalBytes)}
-          </p>
+          <p className="stats">{t.stats(items.length, formatBytes(totalBytes))}</p>
           <button className="primary" disabled={!items.length || !!busy} onClick={download}>
-            ⬇ Завантажити PDF
+            {t.download}
           </button>
           <button disabled={!items.length || !!busy} onClick={openPdf}>
-            Відкрити PDF у новій вкладці
+            {t.openPdf}
           </button>
-          {busy && <p className="busy">{busy}</p>}
+          {busy && <p className="busy">{t[busy]}</p>}
         </aside>
       </div>
 
-      {dragFiles && <div className="dropping">Відпустіть, щоб додати картинки</div>}
+      {dragFiles && <div className="dropping">{t.dropping}</div>}
       {viewing && (
         <div className="lightbox" onClick={() => setViewing(null)}>
           <img src={viewing.url} alt={viewing.name} />
           <span>{viewing.name} · {sizeKey(viewing)} · {formatBytes(viewing.size)}</span>
         </div>
       )}
+      {!chosen && <LanguageDialog />}
     </div>
   );
 }

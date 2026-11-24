@@ -1,5 +1,5 @@
 // Browser-only helpers (canvas / Image).
-import type { Fit, ImageItem, Size } from "./types";
+import type { Fit, ImageItem, Note, Size } from "./types";
 import { fitInto } from "./layout";
 
 let seq = 0;
@@ -25,7 +25,7 @@ async function sniffMime(blob: Blob): Promise<string> {
   return blob.type || "application/octet-stream";
 }
 
-export async function readImage(blob: Blob, name: string, notes: string[] = []): Promise<ImageItem> {
+export async function readImage(blob: Blob, name: string, notes: Note[] = []): Promise<ImageItem> {
   const url = URL.createObjectURL(blob);
   try {
     const [img, mime] = await Promise.all([decode(url), sniffMime(blob)]);

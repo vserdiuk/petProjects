@@ -10,9 +10,14 @@ export type ImageItem = {
   height: number;
   /** File size in bytes. */
   size: number;
-  /** Human-readable notes about edits made in the app ("JPG → PNG", ...). */
-  notes: string[];
+  /** Edits made in the app, shown on the card (translated at render time). */
+  notes: Note[];
 };
+
+export type Note =
+  | { kind: "convert"; from: string }
+  | { kind: "resize"; from: string; to: string }
+  | { kind: "compress"; from: number; to: number };
 
 export type Size = { width: number; height: number };
 
