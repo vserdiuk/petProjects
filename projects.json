@@ -5,5 +5,12 @@
     "description": "Encode/decode polylines on a map and generate pickup/dropoff orders along the route as CSV.",
     "icon": "🗺️",
     "status": "in-progress"
+  },
+  {
+    "slug": "img2pdf",
+    "title": "Images → PDF",
+    "description": "Turn a set of pictures (e.g. comic pages) into one PDF: reorder, catch non-PNG files and mismatched sizes, preview pages, download.",
+    "icon": "📚",
+    "status": "in-progress"
   }
 ]
