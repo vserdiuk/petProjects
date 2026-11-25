@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Стіна зі стікерів</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+<div class="app">
+  <aside class="panel">
+    <header class="brand">
+      <h1>Стіна зі стікерів</h1>
+      <p>Розріж картинку на стікери й надрукуй її частинами на звичайному принтері.</p>
+    </header>
+
+    <nav class="steps" role="tablist" aria-label="Кроки">
+      <button role="tab" data-tab="1"><span class="n">1</span>Сітка</button>
+      <button role="tab" data-tab="2"><span class="n">2</span>Картинка</button>
+      <button role="tab" data-tab="3"><span class="n">3</span>Друк</button>
+    </nav>
+
+    <!-- 1. Grid -->
+    <section class="pane" data-pane="1">
+      <div class="field">
+        <span class="lbl">Розмір стікера</span>
+        <select id="preset" aria-label="Готовий розмір">
+          <option value="76x76">76 × 76 мм (класичний)</option>
+          <option value="51x51">51 × 51 мм (малий)</option>
+          <option value="76x127">76 × 127 мм</option>
+          <option value="102x152">102 × 152 мм</option>
+          <option value="custom">Свій розмір</option>
+        </select>
+        <div class="pair" style="margin-top:10px">
+          <label><span class="sub">Ширина, мм</span><input type="number" data-k="noteW" min="20" max="300" step="0.5"></label>
+          <label><span class="sub">Висота, мм</span><input type="number" data-k="noteH" min="20" max="300" step="0.5"></label>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Кількість стікерів</span>
+        <div class="pair">
+          <label><span class="sub">По ширині</span><input type="number" data-k="cols" min="1" max="40" step="1"></label>
+          <label><span class="sub">По висоті</span><input type="number" data-k="rows" min="1" max="40" step="1"></label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="lbl" for="margin">Біле поле навколо друку, мм</label>
+        <input id="margin" type="number" data-k="margin" min="0" step="0.5">
+        <p class="hint" id="printSize"></p>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Як різати картинку</span>
+        <div class="seg" data-seg="mode">
+          <button data-v="hidden">Ховати під полями</button>
+          <button data-v="spread">Розсунути</button>
+        </div>
+        <p class="hint" id="modeHint"></p>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Папір</span>
+        <div class="seg" data-seg="paper">
+          <button data-v="a4">A4</button>
+          <button data-v="letter">Letter</button>
+        </div>
+      </div>
+
+      <details>
+        <summary>Розкладка на аркуші</summary>
+        <div class="pair" style="margin-bottom:12px">
+          <label><span class="sub">Відступ від краю, мм</span><input type="number" data-k="edge" min="0" max="40" step="0.5"></label>
+          <label><span class="sub">Між стікерами, мм</span><input type="number" data-k="gap" min="0" max="40" step="0.5"></label>
+        </div>
+        <label class="check"><input type="checkbox" data-k="label"> Друкувати номер у полі стікера</label>
+        <p class="hint">Маленький сірий номер «ряд-стовпчик» у кутку, щоб знати, куди вішати стікер.</p>
+      </details>
+
+      <div class="summary" id="summary"></div>
+      <div class="btnrow" style="margin-top:16px"><button class="btn primary" data-go="2">Далі: картинка</button></div>
+    </section>
+
+    <!-- 2. Image -->
+    <section class="pane" data-pane="2" hidden>
+      <div class="field">
+        <span class="lbl">Картинка</span>
+        <div class="btnrow">
+          <span class="file btn primary">Обрати картинку<input type="file" id="file" accept="image/*" aria-label="Обрати картинку"></span>
+        </div>
+        <p class="hint">Або перетягни файл на прев’ю. Картинка залишається на твоєму пристрої.</p>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Розмір і положення</span>
+        <div class="range"><input type="range" id="zoom" min="20" max="400" step="1" aria-label="Масштаб"><output id="zoomOut"></output></div>
+        <div class="btnrow" style="margin-top:10px">
+          <button class="btn" id="fitCover">Заповнити</button>
+          <button class="btn" id="fitContain">Вмістити</button>
+          <button class="btn" id="rotate">Повернути на 90°</button>
+        </div>
+        <p class="hint">Перетягуй картинку на прев’ю, коліщатко миші змінює масштаб.</p>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Фільтр</span>
+        <div class="seg" data-seg="filter">
+          <button data-v="original">Оригінал</button>
+          <button data-v="gray">Ч/Б</button>
+          <button data-v="dither">Dither</button>
+          <button data-v="halftone">Растр</button>
+        </div>
+      </div>
+
+      <div class="group" id="htGroup">
+        <p class="hint" style="margin:0 0 14px">Газетний растр: тон передається розміром крапок або товщиною ліній на рівній сітці.</p>
+        <div class="field">
+          <span class="lbl">Форма</span>
+          <div class="seg" data-seg="htShape">
+            <button data-v="dot">Крапки</button>
+            <button data-v="line">Лінії</button>
+          </div>
+        </div>
+        <div class="field">
+          <span class="lbl">Крок растру, мм</span>
+          <div class="range"><input type="range" data-k="htCell" min="0.6" max="6" step="0.1" aria-label="Крок растру"><output data-out="htCell"></output></div>
+          <p class="hint">Більший крок дає крупні крапки, помітні здалеку.</p>
+        </div>
+        <div class="field">
+          <span class="lbl">Кут, °</span>
+          <div class="range"><input type="range" data-k="htAngle" min="0" max="90" step="1" aria-label="Кут растру"><output data-out="htAngle"></output></div>
+        </div>
+      </div>
+
+      <div class="group" id="ditherGroup">
+        <div class="field">
+          <label class="lbl" for="algo">Алгоритм</label>
+          <select id="algo" data-k="algo">
+            <option value="atkinson">Atkinson (контрастний, класичний Mac)</option>
+            <option value="floyd">Floyd–Steinberg (м’який, детальний)</option>
+            <option value="bayer">Bayer 8×8 (регулярний візерунок)</option>
+            <option value="threshold">Поріг (чисто чорне й біле)</option>
+          </select>
+        </div>
+        <div class="field">
+          <span class="lbl">Розмір зерна, мм</span>
+          <div class="range"><input type="range" data-k="grain" min="0.15" max="2.5" step="0.05" aria-label="Розмір зерна"><output data-out="grain"></output></div>
+          <p class="hint" id="grainHint">Більше зерно видно здалеку, менше дає більше деталей.</p>
+        </div>
+        <div class="field">
+          <span class="lbl">Поріг</span>
+          <div class="range"><input type="range" data-k="threshold" min="0" max="255" step="1" aria-label="Поріг"><output data-out="threshold"></output></div>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Яскравість</span>
+        <div class="range"><input type="range" data-k="brightness" min="-100" max="100" step="1" aria-label="Яскравість"><output data-out="brightness"></output></div>
+      </div>
+      <div class="field">
+        <span class="lbl">Контраст</span>
+        <div class="range"><input type="range" data-k="contrast" min="-100" max="100" step="1" aria-label="Контраст"><output data-out="contrast"></output></div>
+      </div>
+      <div class="field">
+        <label class="check"><input type="checkbox" data-k="invert"> Інвертувати</label>
+      </div>
+      <div class="btnrow">
+        <button class="btn" id="resetAdj">Скинути налаштування фільтра</button>
+        <button class="btn primary" data-go="3">Далі: друк</button>
+      </div>
+    </section>
+
+    <!-- 3. Print -->
+    <section class="pane" data-pane="3" hidden>
+      <div class="card">
+        <h2>Як друкувати</h2>
+        <ol class="tips">
+          <li>Друкуй у масштабі 100% («Фактичний розмір»), без «Підігнати до сторінки». Лінійка внизу шаблону має бути рівно 100 мм.</li>
+          <li>Наклей стікери в контури клейким краєм догори, по лініях.</li>
+          <li>На проходах друкується лише картинка всередині стікерів, без контурів.</li>
+          <li>Подавай аркуш верхнім краєм уперед, щоб принтер не задирав вільний край стікера.</li>
+          <li>Перед першим проходом зроби позначку олівцем на аркуші й перевір, на якій стороні друкує твій принтер.</li>
+          <li>Після друку дай чорнилу пів хвилини висохнути, тоді знімай стікери.</li>
+        </ol>
+      </div>
+      <span class="lbl" id="passTitle"></span>
+      <ul class="passes" id="passes"></ul>
+      <div class="btnrow">
+        <button class="btn" id="dlAll">Сітка й усі проходи одним PDF</button>
+        <button class="btn" id="resetDone">Скинути прогрес</button>
+      </div>
+      <p class="hint">У спільному PDF перша сторінка є сіткою, а кожна наступна відповідає одному проходу. Друкуй по одній сторінці.</p>
+    </section>
+  </aside>
+
+  <main class="stage">
+    <div class="stage-bar">
+      <div class="seg" data-seg="view" aria-label="Вигляд">
+        <button data-v="wall">Стіна</button>
+        <button data-v="overlay">Накладка</button>
+        <button data-v="map">Мапа</button>
+      </div>
+      <div class="stage-info" id="stageInfo"></div>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="view" aria-label="Прев’ю стіни зі стікерів"></canvas>
+      <div class="empty" id="empty"><div>
+        <p>Перетягни картинку сюди або обери файл.</p>
+        <span class="file btn primary">Обрати картинку<input type="file" id="file2" accept="image/*" aria-label="Обрати картинку"></span>
+      </div></div>
+    </div>
+  </main>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
