@@ -9,6 +9,7 @@ apps/
   polyline/    Polyline delivery generator
   img2pdf/     Images → PDF (e.g. comic pages)
   sticky-wall/ Picture → sticky-note wall, printed in passes
+  dither-photo/ Game Boy Camera–style dithered web camera
 projects.json  registry of projects shown on the portal
 scripts/assemble.mjs  merges all builds into one static dist/
 docs/          specs

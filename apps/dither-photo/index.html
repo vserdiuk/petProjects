@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#202024" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>Dither Photo</title>
+  </head>
+  <body>
+<main class="shell">
+  <div class="bezel">
+    <div class="bezel-top"><span class="led" id="led"></span>DOT MATRIX WITH DITHER<button class="lang" id="langBtn" type="button">UK</button></div>
+    <div class="screen">
+      <canvas id="screen" width="512" height="512"></canvas>
+      <div class="overlay" id="overlay">
+        <p id="msg" data-i18n="needCam">Camera access is needed to take photos</p>
+        <button class="start" id="startBtn" data-i18n="start">TURN ON CAMERA</button>
+      </div>
+      <div id="flash"></div>
+    </div>
+  </div>
+
+  <div class="brand">Dither <b>Photo</b></div>
+
+  <div class="controls">
+    <button class="pill" id="paletteBtn">PAL</button>
+    <button id="shutter" disabled >SNAP</button>
+    <button class="pill" id="flipBtn" hidden>FLIP</button>
+  </div>
+
+  <div class="tune">
+    <span data-i18n="bright">BRIGHT</span><input id="bright" type="range" min="-0.5" max="0.5" step="0.01" value="0">
+    <span data-i18n="contrast">CONTRAST</span><input id="contrast" type="range" min="0.5" max="2.5" step="0.01" value="1.2">
+    <span data-i18n="pixel">PIXEL</span>
+    <div class="seg" id="resSeg">
+      <button data-res="128">128</button><button data-res="256">256</button><button data-res="512">512</button>
+    </div>
+  </div>
+
+  <p class="note" id="status"></p>
+</main>
+
+<video id="video" playsinline muted autoplay></video>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
