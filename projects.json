@@ -15,8 +15,8 @@
   },
   {
     "slug": "sticky-wall",
-    "title": "Стіна зі стікерів",
-    "description": "Розріж картинку на сітку sticky notes, застосуй dither, растр або ч/б і надрукуй її частинами: спершу сітку-шаблон, потім прохід за проходом.",
+    "title": "Sticky note wall",
+    "description": "Cut a picture into a grid of sticky notes, apply dither, halftone or B/W, and print it piece by piece: an empty grid first, then one pass per sheet.",
     "icon": "🟨",
     "status": "in-progress"
   }

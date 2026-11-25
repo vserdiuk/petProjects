@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import './styles.css';
+import { DICTS, LANGS, DEFAULT_LANG, isLang } from './i18n.js';
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -7,6 +8,7 @@ const KEY = 'stickywall:v1';
 const PAPERS = { a4:{w:210,h:297}, letter:{w:215.9,h:279.4} };
 const ADJ = { brightness:0, contrast:0, threshold:128, invert:false, grain:0.4, algo:'atkinson', htCell:1.6, htAngle:45, htShape:'dot' };
 const DEF = {
+  lang:DEFAULT_LANG,
   noteW:76, noteH:76, cols:5, rows:5, margin:2.5, mode:'hidden', paper:'a4', edge:6, gap:6, label:true,
   filter:'dither', ...ADJ, zoom:1, panX:0, panY:0, rot:0, view:'wall', tab:1, done:[], tplDone:false, sig:''
 };
@@ -14,6 +16,8 @@ const LIMITS = { noteW:[20,300], noteH:[20,300], cols:[1,40], rows:[1,40], edge:
   grain:[0.1,3], threshold:[0,255], htCell:[0.4,8], htAngle:[0,90], brightness:[-100,100], contrast:[-100,100] };
 
 let S = Object.assign({}, DEF, (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch(e) { return {}; } })());
+if (!isLang(S.lang)) S.lang = DEFAULT_LANG;
+const tx = () => DICTS[S.lang];
 const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} };
 
 let img = null;
@@ -56,7 +60,7 @@ function layout() {
   const nw = S.noteW, nh = S.noteH;
   const nc = Math.floor((P.w - 2 * S.edge + S.gap) / (nw + S.gap));
   const nr = Math.floor((P.h - 2 * S.edge + S.gap) / (nh + S.gap));
-  if (nc < 1 || nr < 1) return { P, err:'Стікер такого розміру не вміщується на аркуш. Зменш відступ від краю або розмір стікера.' };
+  if (nc < 1 || nr < 1) return { P, err:tx().errFit };
   const gw = nc * nw + (nc - 1) * S.gap, gh = nr * nh + (nr - 1) * S.gap;
   const x0 = (P.w - gw) / 2, y0 = (P.h - gh) / 2;
   const slots = [];
@@ -277,7 +281,7 @@ function draw() {
       ctx.fillText(`${r+1}-${c+1}`, x + S.noteW * p / 2, y + S.noteH * p / 2 - fs * 0.25);
       if (info && fs * 0.5 >= 7) {
         ctx.font = `500 ${fs * 0.45}px Onest, system-ui, sans-serif`; ctx.fillStyle = '#5e666f';
-        ctx.fillText(`прохід ${info[0] + 1}`, x + S.noteW * p / 2, y + S.noteH * p / 2 + fs * 0.6);
+        ctx.fillText(tx().mapPass(info[0] + 1), x + S.noteW * p / 2, y + S.noteH * p / 2 + fs * 0.6);
       }
     }
   } else {
@@ -337,7 +341,7 @@ cv.addEventListener('wheel', e => {
 
 /* ---------- UI ---------- */
 function syncZoom() { $('#zoom').value = Math.round(S.zoom * 100); $('#zoomOut').textContent = Math.round(S.zoom * 100) + '%'; }
-const fmt = (n, d = 1) => (Math.round(n * 10 ** d) / 10 ** d).toString().replace('.', ',');
+const fmt = (n, d = 1) => (Math.round(n * 10 ** d) / 10 ** d).toString().replace('.', tx().decimal);
 
 function checkSig() {
   const s = sigOf();
@@ -359,37 +363,30 @@ function updateUI() {
   const pv = `${S.noteW}x${S.noteH}`;
   $('#preset').value = [...$('#preset').options].some(o => o.value === pv) ? pv : 'custom';
   const g = geo();
-  $('#printSize').textContent = `Друкується область ${fmt(g.pw)} × ${fmt(g.ph)} мм на стікері ${fmt(S.noteW)} × ${fmt(S.noteH)} мм.`;
+  $('#printSize').textContent = tx().printSize(fmt(g.pw), fmt(g.ph), fmt(S.noteW), fmt(S.noteH));
   $('#modeHint').textContent = S.mode === 'hidden'
-    ? 'Картинка розкладається на всю стіну, а смужки під полями просто не друкуються. Лінії лишаються прямими.'
-    : 'Картинка ріжеться на суцільні шматки й розсувається полями. Нічого не губиться, але на стиках лінії зміщуються.';
+    ? tx().modeHidden : tx().modeSpread;
   $('#ditherGroup').hidden = S.filter !== 'dither';
   $('#htGroup').hidden = S.filter !== 'halftone';
   $('#empty').hidden = !!img;
 
   const L = layout(), total = S.cols * S.rows;
-  const wall = `Стіна ${fmt(S.cols * S.noteW / 10)} × ${fmt(S.rows * S.noteH / 10)} см`;
+  const wall = tx().wall(fmt(S.cols * S.noteW / 10), fmt(S.rows * S.noteH / 10));
   if (L.err) {
     $('#summary').innerHTML = `<span class="warn" style="margin:0">${L.err}</span>`;
     $('#stageInfo').textContent = wall;
   } else {
     const n = L.passes.length;
-    $('#summary').innerHTML = `<strong>${wall}</strong><br>${total} ${plural(total,'стікер','стікери','стікерів')}, по ${L.slots.length} на аркуш, ${n} ${plural(n,'прохід','проходи','проходів')} через принтер.`;
-    $('#stageInfo').textContent = `${wall}, ${total} ${plural(total,'стікер','стікери','стікерів')}, ${n} ${plural(n,'прохід','проходи','проходів')}`;
+    $('#summary').innerHTML = `<strong>${wall}</strong><br>${tx().summary(tx().notes(total), L.slots.length, tx().passes(n))}`;
+    $('#stageInfo').textContent = `${wall}, ${tx().notes(total)}, ${tx().passes(n)}`;
   }
-}
-function plural(n, one, few, many) {
-  const a = n % 10, b = n % 100;
-  if (a === 1 && b !== 11) return one;
-  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return few;
-  return many;
 }
 function updateGrainHint() {
   const h = $('#grainHint');
   if (S.filter === 'dither' && workCapped) {
     h.className = 'warn';
-    h.textContent = `Для такої великої стіни зерно збільшено до ${fmt(1 / workKx, 2)} мм.`;
-  } else { h.className = 'hint'; h.textContent = 'Більше зерно видно здалеку, менше дає більше деталей.'; }
+    h.textContent = tx().grainCapped(fmt(1 / workKx, 2));
+  } else { h.className = 'hint'; h.textContent = tx().grainHint; }
 }
 
 function setVal(k, raw, el) {
@@ -441,7 +438,7 @@ async function setImageBlob(blob, fresh) {
   const im = new Image();
   try {
     await new Promise((res, rej) => { im.onload = res; im.onerror = rej; im.src = url; });
-  } catch (e) { toast('Не вдалося відкрити файл. Спробуй JPG або PNG.'); return; }
+  } catch (e) { toast(tx().errOpen); return; }
   img = im;
   if (fresh) {
     S.zoom = 1; S.panX = 0; S.panY = 0; S.rot = 0;
@@ -460,7 +457,7 @@ window.addEventListener('dragover', e => e.preventDefault());
 window.addEventListener('drop', e => {
   e.preventDefault(); dragDepth = 0; document.body.classList.remove('dropping');
   const f = [...(e.dataTransfer.files || [])].find(f => f.type.startsWith('image/'));
-  if (f) setImageBlob(f, true); else toast('Перетягни файл картинки (JPG, PNG, WebP).');
+  if (f) setImageBlob(f, true); else toast(tx().errDrop);
 });
 
 /* ---------- toast ---------- */
@@ -506,16 +503,16 @@ function drawTemplate(doc, L) {
     }
     doc.setTextColor(200); doc.setFontSize(Math.min(48, S.noteH * 0.9));
     doc.text(String(i + 1), s.x + S.noteW / 2, s.y + S.noteH / 2, { align:'center', baseline:'middle' });
-    putText(doc, '▲ клейкий край', s.x + S.noteW / 2, s.y + 4.2, Math.min(3, S.noteW / 20), '#8a9097');
+    putText(doc, tx().pdfSticky, s.x + S.noteW / 2, s.y + 4.2, Math.min(3, S.noteW / 20), '#8a9097');
   });
   const top = L.y0, bottom = L.P.h - L.y0 - L.gh;
-  if (top >= 9) putText(doc, '↑ Подавай аркуш у принтер цим краєм. Стікери клей клейким краєм догори.', L.P.w / 2, top / 2, 3.2, '#4a5056');
+  if (top >= 9) putText(doc, tx().pdfFeed, L.P.w / 2, top / 2, 3.2, '#4a5056');
   if (bottom >= 13) {
     const y = L.P.h - bottom / 2 - 1.5, x0 = (L.P.w - 100) / 2;
     doc.setDrawColor(40); doc.setLineWidth(0.25);
     doc.line(x0, y, x0 + 100, y);
     for (let i = 0; i <= 10; i++) doc.line(x0 + i * 10, y, x0 + i * 10, y - (i % 5 === 0 ? 3 : 1.6));
-    putText(doc, 'Тут має бути рівно 100 мм. Якщо ні, друкуй у масштабі 100%.', L.P.w / 2, y + 3.4, 2.8, '#4a5056');
+    putText(doc, tx().pdfRuler, L.P.w / 2, y + 3.4, 2.8, '#4a5056');
   }
 }
 function tileImage(t, g) {
@@ -564,14 +561,14 @@ function saveFile(name, blob) {
 }
 async function busy(btn, fn) {
   const L = layout(); if (L.err) { toast(L.err); return; }
-  const label = btn.textContent; btn.disabled = true; btn.textContent = 'Готую PDF…';
+  const label = btn.textContent; btn.disabled = true; btn.textContent = tx().making;
   await new Promise(r => setTimeout(r, 30));
-  try { await fn(); } catch (e) { console.error(e); toast('Не вдалося створити PDF. Спробуй ще раз.'); }
+  try { await fn(); } catch (e) { console.error(e); toast(tx().errPdf); }
   btn.disabled = false; btn.textContent = label;
 }
 $('#dlAll').addEventListener('click', e => {
-  if (!img) { toast('Спершу додай картинку.'); return; }
-  busy(e.currentTarget, async () => { const L = layout(); saveFile('sitka-i-prohody.pdf', await makePasses(L.passes.map((_, i) => i), true)); });
+  if (!img) { toast(tx().needImage); return; }
+  busy(e.currentTarget, async () => { const L = layout(); saveFile('sticky-grid-and-passes.pdf', await makePasses(L.passes.map((_, i) => i), true)); });
 });
 $('#resetDone').addEventListener('click', () => { S.done = []; S.tplDone = false; persist(); passesDirty = true; schedule(false); });
 
@@ -581,15 +578,15 @@ function renderPasses() {
   list.innerHTML = '';
   if (L.err) { $('#passTitle').textContent = ''; list.innerHTML = `<li class="warn">${L.err}</li>`; return; }
   const n = L.passes.length, doneN = L.passes.filter((_, i) => S.done[i]).length;
-  $('#passTitle').textContent = `Друк: сітка ${S.tplDone ? 'готова' : 'ще не надрукована'}, проходів ${doneN} з ${n}`;
+  $('#passTitle').textContent = tx().passTitle(S.tplDone, doneN, n);
   const cur = S.tplDone ? L.passes.findIndex((_, i) => !S.done[i]) : -1;
   const g = geo(), dpr = window.devicePixelRatio || 1;
   const tli = document.createElement('li');
   tli.className = 'pass' + (S.tplDone ? ' done' : ' current');
   const tb = document.createElement('div');
-  tb.innerHTML = `<h3>Перший друк: порожня сітка</h3><p>Контури місць під стікери на чистому аркуші. Друкуєш один раз, наклеюєш на неї стікери й робиш на ній усі проходи.</p>
-    <div class="btnrow"><button class="btn${S.tplDone ? '' : ' primary'}" data-tpl>Завантажити PDF</button>
-    <label class="check"><input type="checkbox" data-tpldone${S.tplDone ? ' checked' : ''}> Надруковано</label></div>`;
+  tb.innerHTML = `<h3>${tx().tplTitle}</h3><p>${tx().tplText}</p>
+    <div class="btnrow"><button class="btn${S.tplDone ? '' : ' primary'}" data-tpl>${tx().download}</button>
+    <label class="check"><input type="checkbox" data-tpldone${S.tplDone ? ' checked' : ''}> ${tx().printed}</label></div>`;
   tli.append(miniPage(L, dpr), tb); list.append(tli);
   L.passes.forEach((tiles, i) => {
     const li = document.createElement('li');
@@ -597,9 +594,9 @@ function renderPasses() {
     const mc = miniPage(L, dpr, tiles, g);
     const body = document.createElement('div');
     const map = tiles.map((t, si) => `${si + 1}→${code(t)}`).join(', ');
-    body.innerHTML = `<h3>Прохід ${i + 1} з ${n}</h3><p>Місце на сітці → стікер: ${map}</p>
-      <div class="btnrow"><button class="btn${i === cur ? ' primary' : ''}" data-dl="${i}">Завантажити PDF</button>
-      <label class="check"><input type="checkbox" data-done="${i}"${S.done[i] ? ' checked' : ''}> Надруковано</label></div>`;
+    body.innerHTML = `<h3>${tx().passHead(i + 1, n)}</h3><p>${tx().passMap(map)}</p>
+      <div class="btnrow"><button class="btn${i === cur ? ' primary' : ''}" data-dl="${i}">${tx().download}</button>
+      <label class="check"><input type="checkbox" data-done="${i}"${S.done[i] ? ' checked' : ''}> ${tx().printed}</label></div>`;
     li.append(mc, body); list.append(li);
   });
 }
@@ -627,11 +624,11 @@ function miniPage(L, dpr, tiles, g) {
 }
 $('#passes').addEventListener('click', e => {
   const tb = e.target.closest('[data-tpl]');
-  if (tb) { busy(tb, async () => saveFile('sitka-stikery.pdf', await makeTemplate())); return; }
+  if (tb) { busy(tb, async () => saveFile('sticky-grid.pdf', await makeTemplate())); return; }
   const b = e.target.closest('[data-dl]'); if (!b) return;
-  if (!img) { toast('Спершу додай картинку.'); return; }
+  if (!img) { toast(tx().needImage); return; }
   const i = +b.dataset.dl, n = layout().passes.length;
-  busy(b, async () => saveFile(`prohid-${i + 1}-z-${n}.pdf`, await makePasses([i])));
+  busy(b, async () => saveFile(`sticky-pass-${i + 1}-of-${n}.pdf`, await makePasses([i])));
 });
 $('#passes').addEventListener('change', e => {
   if (e.target.matches('[data-tpldone]')) { S.tplDone = e.target.checked; persist(); passesDirty = true; schedule(false); return; }
@@ -639,7 +636,26 @@ $('#passes').addEventListener('change', e => {
   S.done[+c.dataset.done] = c.checked; persist(); passesDirty = true; schedule(false);
 });
 
+/* ---------- language ---------- */
+function applyLang() {
+  const d = tx();
+  document.documentElement.lang = S.lang;
+  document.title = d.title;
+  $$('[data-i18n]').forEach(el => { const v = d[el.dataset.i18n]; if (typeof v === 'string') el.textContent = v; });
+  $$('[data-i18n-aria]').forEach(el => { const v = d[el.dataset.i18nAria]; if (typeof v === 'string') el.setAttribute('aria-label', v); });
+  $('#lang').querySelectorAll('button').forEach(b => {
+    const on = b.dataset.lang === S.lang;
+    b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on));
+  });
+}
+$('#lang').innerHTML = LANGS.map(l => `<button type="button" data-lang="${l.code}" lang="${l.code}" title="${l.name}">${l.label}</button>`).join('');
+$('#lang').addEventListener('click', e => {
+  const b = e.target.closest('[data-lang]'); if (!b || b.dataset.lang === S.lang) return;
+  S.lang = b.dataset.lang; persist(); applyLang(); updateUI(); passesDirty = true; schedule(false);
+});
+
 /* ---------- start ---------- */
+applyLang();
 if (!S.sig) S.sig = sigOf();
 updateUI(); schedule();
 idbGet('image').then(b => { if (b) setImageBlob(b, false); });
