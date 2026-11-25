@@ -19,5 +19,12 @@
     "description": "Cut a picture into a grid of sticky notes, apply dither, halftone or B/W, and print it piece by piece: an empty grid first, then one pass per sheet.",
     "icon": "🟨",
     "status": "in-progress"
+  },
+  {
+    "slug": "dither-photo",
+    "title": "Dither Photo",
+    "description": "A Game Boy Camera–style web camera: live dithered preview, 4-tone palettes, front/back camera, one-tap save of a 512×512 PNG.",
+    "icon": "📷",
+    "status": "in-progress"
   }
 ]
