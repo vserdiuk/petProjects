@@ -12,12 +12,5 @@
     "description": "Turn a set of pictures (e.g. comic pages) into one PDF: reorder, catch non-PNG files and mismatched sizes, preview pages, download.",
     "icon": "📚",
     "status": "in-progress"
-  },
-  {
-    "slug": "sticky-wall",
-    "title": "Стіна зі стікерів",
-    "description": "Розріж картинку на сітку sticky notes, застосуй dither, растр або ч/б і надрукуй її частинами: спершу сітку-шаблон, потім прохід за проходом.",
-    "icon": "🟨",
-    "status": "in-progress"
   }
 ]

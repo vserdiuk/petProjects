@@ -8,7 +8,6 @@ apps/
   portal/      index page (reads projects.json)
   polyline/    Polyline delivery generator
   img2pdf/     Images → PDF (e.g. comic pages)
-  sticky-wall/ Picture → sticky-note wall, printed in passes
 projects.json  registry of projects shown on the portal
 scripts/assemble.mjs  merges all builds into one static dist/
 docs/          specs
